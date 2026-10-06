@@ -1,0 +1,7 @@
+interface:
+  display_name: "Campaign Product Picker"
+  short_description: "Curate campaign grids and date-safe CT imports"
+  icon_small: "./assets/campaign-icon.png"
+  icon_large: "./assets/campaign-icon.png"
+  brand_color: "#FC5692"
+  default_prompt: "Use $campaign-product-picker to curate a 48-product campaign assortment, create an Excel-safe review workbook and validated Commercetools import package, and visually QA the storefront grid."

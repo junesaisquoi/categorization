@@ -1,0 +1,7 @@
+interface:
+  display_name: "Web DMD Workflow"
+  short_description: "Start here and choose a Web DMD workflow"
+  icon_small: "./assets/workflow-icon.png"
+  icon_large: "./assets/workflow-icon.png"
+  brand_color: "#111111"
+  default_prompt: "Use $begin-web-dmd-workflow to show the clickable Web DMD workflow selector."

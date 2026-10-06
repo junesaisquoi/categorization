@@ -1,0 +1,7 @@
+interface:
+  display_name: "Category Builder"
+  short_description: "Build and review commercetools category assignments"
+  icon_small: "./assets/hierarchy-icon-v2.png"
+  icon_large: "./assets/hierarchy-icon-v2.png"
+  brand_color: "#139FEA"
+  default_prompt: "Use $category-builder and first ask whether I want to add regular categories, correct assignments, move full-price products to Sale, move Sale products to full price, or review only. Keep the workflow in Codex unless I explicitly request the standalone browser UI."

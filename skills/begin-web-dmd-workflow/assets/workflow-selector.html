@@ -1,0 +1,122 @@
+<div id="web-dmd-workflow-selector" aria-label="Choose a Web DMD workflow">
+  <style>
+    #web-dmd-workflow-selector .web-dmd-choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    #web-dmd-workflow-selector .web-dmd-choice {
+      display: flex;
+      min-width: 0;
+      width: 100%;
+      box-sizing: border-box;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 16px;
+      white-space: normal;
+      text-align: left;
+      color: var(--card-foreground);
+      background: var(--card);
+      border-color: var(--border);
+    }
+
+    #web-dmd-workflow-selector .web-dmd-choice-title {
+      font-weight: 500;
+    }
+
+    #web-dmd-workflow-selector .web-dmd-choice-description {
+      color: currentColor;
+      opacity: 0.72;
+    }
+
+    #web-dmd-workflow-status:not(:empty) {
+      margin-top: 10px;
+    }
+
+    @media (max-width: 620px) {
+      #web-dmd-workflow-selector .web-dmd-choice-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+  <div class="web-dmd-choice-grid">
+    <button class="btn web-dmd-choice" type="button" data-workflow="campaign">
+      <span class="web-dmd-choice-title">Build a campaign</span>
+      <span class="text-small web-dmd-choice-description">Curate products, ordering and campaign categories.</span>
+    </button>
+    <button class="btn web-dmd-choice" type="button" data-workflow="add">
+      <span class="web-dmd-choice-title">Add regular categories</span>
+      <span class="text-small web-dmd-choice-description">Assign navigation for new or missing products.</span>
+    </button>
+    <button class="btn web-dmd-choice" type="button" data-workflow="correct">
+      <span class="web-dmd-choice-title">Correct category assignments</span>
+      <span class="text-small web-dmd-choice-description">Fix categories that conflict with PIM data.</span>
+    </button>
+    <button class="btn web-dmd-choice" type="button" data-workflow="to-sale">
+      <span class="web-dmd-choice-title">Full price → Sale</span>
+      <span class="text-small web-dmd-choice-description">Move discounted products into the Sale structure.</span>
+    </button>
+    <button class="btn web-dmd-choice" type="button" data-workflow="from-sale">
+      <span class="web-dmd-choice-title">Sale → Full price</span>
+      <span class="text-small web-dmd-choice-description">Restore regular navigation after a promotion.</span>
+    </button>
+    <button class="btn web-dmd-choice" type="button" data-workflow="review">
+      <span class="web-dmd-choice-title">Review only</span>
+      <span class="text-small web-dmd-choice-description">Find category issues without changing anything.</span>
+    </button>
+  </div>
+  <div id="web-dmd-workflow-status" class="text-small text-muted" aria-live="polite"></div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById("web-dmd-workflow-selector");
+  const status = document.getElementById("web-dmd-workflow-status");
+  if (!root || !status) return;
+
+  const choices = {
+    campaign: {
+      title: "Build a campaign",
+      prompt: "Use $campaign-product-picker. I want to build a campaign. Show the visual campaign intake first."
+    },
+    add: {
+      title: "Add regular categories",
+      prompt: "Use $category-builder. I want to add regular categories for a new season or fill missing assignments. Keep existing categories and ask only for the required files."
+    },
+    correct: {
+      title: "Correct category assignments",
+      prompt: "Use $category-builder. I want to correct category assignments that contradict PIM. Ask only for the required files."
+    },
+    "to-sale": {
+      title: "Move products into Sale",
+      prompt: "Use $category-builder. I want to move full-price products into Sale, including both campaign-specific and usual Sale navigation. Ask only for the required files."
+    },
+    "from-sale": {
+      title: "Return products to full price",
+      prompt: "Use $category-builder. I want to move Sale products back to full price and restore their regular categories. Ask only for the required files."
+    },
+    review: {
+      title: "Review current categorization",
+      prompt: "Use $category-builder. I want to review current category assignments without changing anything or producing an upload file. Ask only for the required files."
+    }
+  };
+
+  root.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-workflow]");
+    if (!button || !root.contains(button)) return;
+    const choice = choices[button.dataset.workflow];
+    if (!choice) return;
+    button.disabled = true;
+    status.textContent = `Opening ${choice.title}…`;
+    try {
+      await window.openai.sendFollowUpMessage({ prompt: choice.prompt, title: choice.title });
+      status.textContent = "";
+    } catch (error) {
+      button.disabled = false;
+      status.textContent = "That action did not open. Please choose it again.";
+    }
+  });
+})();
+</script>

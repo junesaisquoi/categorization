@@ -1,0 +1,2075 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Category Builder — Carhartt WIP eCommerce</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --ink:#171614; --paper:#ffffff; --grey-1:#f6f5f3; --grey-2:#e5e3df;
+  --grey-3:#9b978f; --grey-4:#5d5a54;
+  /* muted, low-chroma accents: enough hue to tell states apart at a glance,
+     not enough to compete with the content */
+  --stop:#f2ddd8;   --stop-ink:#8c3f2e;   /* nothing to assign */
+  --hold:#f7e7cf;   --hold-ink:#8a5a1d;   /* held back */
+  --look:#f7f0cf;   --look-ink:#7a641a;   /* worth a look */
+  --good:#dcebdd;   --good-ink:#33613c;   /* ready */
+  --calm:#dde6ef;   --calm-ink:#3a5670;   /* no change / info */
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:0 28px 120px}
+
+/* ---- masthead ---- */
+header{border-bottom:1px solid var(--ink);padding:34px 0 14px;margin-bottom:34px}
+h1{font-size:26px;font-weight:600;letter-spacing:-.025em;margin:0}
+.sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--grey-4);margin-top:9px}
+
+/* ---- step structure ---- */
+.step{border-top:1px solid var(--grey-2);padding:26px 0}
+.step:first-of-type{border-top:none;padding-top:0}
+.step-head{display:flex;gap:14px;align-items:baseline;margin-bottom:16px}
+.step-num{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--grey-3);
+  width:26px;flex:none;padding-top:2px}
+.step-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.step-note{font-size:12.5px;color:var(--grey-4);margin-top:3px;font-weight:400}
+.step-body{padding-left:40px}
+@media(max-width:640px){.step-body{padding-left:0}}
+
+/* ---- mode switch ---- */
+.modecards{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:1px;
+  background:var(--grey-2);border:1px solid var(--grey-2)}
+.modecards button{background:var(--paper);border:none;text-align:left;padding:15px 16px;cursor:pointer;
+  font-family:var(--sans);color:var(--ink);display:flex;flex-direction:column;gap:6px;transition:background .12s}
+.modecards button:hover{background:var(--grey-1)}
+.modecards button[aria-pressed="true"]{background:var(--calm);box-shadow:inset 3px 0 0 var(--calm-ink)}
+.modecards button[aria-pressed="true"] .mc-t{color:var(--calm-ink)}
+.modecards button:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.mc-t{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.mc-d{font-size:12px;color:var(--grey-4);line-height:1.5}
+
+/* ---- drop zones ---- */
+.drops{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:1px;
+  background:var(--grey-2);border:1px solid var(--grey-2)}
+.drop{background:var(--paper);padding:17px 16px;min-height:126px;display:flex;flex-direction:column;
+  cursor:pointer;transition:background .12s}
+.drop:hover,.drop.over{background:var(--grey-1)}
+.drop.loaded{background:var(--good);box-shadow:inset 3px 0 0 var(--good-ink)}
+.drop.loaded .drop-t{color:var(--good-ink)}
+.drop.err{background:var(--hold);box-shadow:inset 3px 0 0 var(--hold-ink)}
+.drop.err .drop-s{color:var(--hold-ink)}
+.drop-k{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey-3);margin-bottom:7px}
+.drop.loaded .drop-k{color:var(--good-ink);opacity:.7}
+.drop-t{font-size:13.5px;font-weight:600;letter-spacing:-.005em}
+.drop-h{font-size:11.5px;color:var(--grey-4);margin-top:5px;line-height:1.5}
+.drop-h b{font-family:var(--mono);font-weight:400;font-size:11px;color:var(--ink)}
+.drop.loaded .drop-h b{color:var(--good-ink)}
+.drop{min-height:150px}
+.drop.loaded .drop-h{color:var(--grey-4)}
+.drop-s{margin-top:auto;font-family:var(--mono);font-size:11px;padding-top:11px;
+  color:var(--grey-3);word-break:break-all}
+.drop.loaded .drop-s{color:var(--good-ink);font-weight:500}
+.clear{position:absolute;top:9px;right:9px;font-family:var(--mono);font-size:15px;line-height:1;
+  background:none;border:none;cursor:pointer;color:var(--grey-3);padding:4px 6px}
+.clear:hover{color:var(--ink)}
+.drop.loaded .clear{color:var(--good-ink);opacity:.55}
+.drop.loaded .clear:hover{opacity:1}
+.drop{position:relative}
+.drop.optional .drop-t::after{content:" (optional)";font-weight:400;color:var(--grey-3);font-size:11.5px}
+
+/* ---- fields ---- */
+.subhead{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey-4);margin-top:26px;padding-bottom:7px;border-bottom:1px solid var(--grey-2)}
+.subhead span{text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:12px;color:var(--grey-3)}
+.fields{display:flex;flex-wrap:wrap;gap:22px;margin-top:18px}
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--grey-4)}
+select,input[type=text],input[type=date]{font-family:var(--mono);font-size:12.5px;padding:8px 10px;
+  border:1px solid var(--grey-2);background:var(--paper);color:var(--ink);min-width:190px;border-radius:0}
+select:focus,input:focus{outline:none;border-color:var(--ink)}
+
+/* ---- run ---- */
+.moretog{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;background:none;border:none;
+  border-bottom:1px solid var(--grey-2);padding:6px 0;margin-top:18px;cursor:pointer;color:var(--grey-4);display:block}
+.moretog:hover{color:var(--ink);border-bottom-color:var(--ink)}
+.plan{background:var(--grey-1);border-left:3px solid var(--grey-3);padding:12px 15px;margin:18px 0 16px;
+  font-size:13px;line-height:1.55;max-width:78ch;border-radius:0 2px 2px 0}
+.plan b{font-weight:600}
+.plan.ready{background:var(--good);border-left-color:var(--good-ink)}
+.run{font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+  background:var(--ink);color:var(--paper);border:none;padding:15px 34px;cursor:pointer;margin-top:8px}
+.run:disabled{background:var(--grey-2);color:var(--grey-3);cursor:not-allowed}
+.run:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+/* ---- counters ---- */
+.counts{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--ink);margin-bottom:26px}
+.count{padding:15px 22px;border-right:1px solid var(--grey-2);flex:1;min-width:118px}
+.count:last-child{border-right:none}
+.count-n{font-family:var(--mono);font-size:26px;letter-spacing:-.03em;line-height:1}
+.count-l{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey-4);margin-top:8px}
+.count.flag{background:var(--look)}
+.count.flag .count-n{color:var(--look-ink)}
+.count.flag .count-l{color:var(--look-ink);opacity:.75}
+
+/* ---- ledger: the diff view ---- */
+.ledger{border-top:1px solid var(--ink);font-family:var(--mono);font-size:11.5px}
+.lrow{display:grid;grid-template-columns:44px 1fr;border-bottom:1px solid var(--grey-2)}
+.lrow:hover{background:var(--grey-1)}
+.lidx{color:var(--grey-3);padding:13px 0 13px 2px;font-size:10px;border-right:1px solid var(--grey-2)}
+.lbody{padding:12px 0 13px 14px;min-width:0}
+.lkey{font-weight:600;letter-spacing:-.01em}
+.lname{font-family:var(--sans);font-size:12.5px;color:var(--grey-4);margin-left:9px}
+.lcats{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.cat{padding:2.5px 8px;border:1px solid var(--grey-2);white-space:nowrap;font-size:11px;border-radius:2px}
+.cat.rm{background:var(--stop);border-color:#e6c7c0;color:var(--stop-ink);
+  text-decoration:line-through;text-decoration-thickness:1px}
+.cat.add{background:var(--good);border-color:#bcd6be;color:var(--good-ink);font-weight:500}
+.cat.keep{background:var(--paper);border-color:var(--grey-2);color:var(--grey-4)}
+.lflag{margin-top:9px;font-size:11px;color:var(--look-ink);border-left:2px solid var(--look-ink);
+  padding-left:9px;background:var(--look);padding:6px 9px;border-radius:0 2px 2px 0}
+.lnote{margin-top:6px;font-size:11px;color:var(--grey-3);padding-left:11px}
+.more{font-family:var(--mono);font-size:11px;color:var(--grey-4);padding:15px 0;
+  border-bottom:1px solid var(--grey-2)}
+/* pattern rows: one line per repeated outcome, expandable to the products underneath */
+.pat{border-bottom:1px solid var(--grey-2)}
+.pat-h{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:baseline;
+  padding:12px 4px;cursor:pointer;background:none;border:none;width:100%;text-align:left;
+  font-family:var(--sans);color:var(--ink)}
+.pat-h:hover{background:var(--grey-1)}
+.pat-n{font-family:var(--mono);font-size:15px;letter-spacing:-.02em}
+.pat-b{min-width:0}
+.pat-cats{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px}
+.pat-meta{font-size:12px;color:var(--grey-4)}
+.pat-x{font-family:var(--mono);font-size:11px;color:var(--grey-3);padding-top:3px}
+.pat[open] .pat-x::after{content:"\2212"}
+.pat-x::after{content:"+"}
+.pat-items{padding:2px 4px 14px 64px}
+.pat-item{display:flex;gap:11px;padding:4px 0;font-size:12px;align-items:baseline}
+.pat-item .k{font-family:var(--mono);font-size:11.5px;font-weight:600;white-space:nowrap}
+.pat-item .nm{color:var(--grey-4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pat-more{font-family:var(--mono);font-size:11px;color:var(--grey-3);padding:7px 0 0}
+.sect{padding:13px 15px;margin-top:14px;border-left:3px solid var(--grey-2);background:var(--grey-1)}
+.sect:first-child{margin-top:0}
+.sect-t{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.sect-n{font-size:12px;color:var(--grey-4);margin-top:4px;max-width:72ch;line-height:1.5}
+.sect[data-b="empty"]{background:var(--stop);border-left-color:var(--stop-ink)}
+.sect[data-b="empty"] .sect-t{color:var(--stop-ink)}
+.sect[data-b="held"]{background:var(--hold);border-left-color:var(--hold-ink)}
+.sect[data-b="held"] .sect-t{color:var(--hold-ink)}
+.sect[data-b="check"],.sect[data-b="attention"]{background:var(--look);border-left-color:var(--look-ink)}
+.sect[data-b="check"] .sect-t,.sect[data-b="attention"] .sect-t{color:var(--look-ink)}
+.sect[data-b="clean"],.sect[data-b="ok"]{background:var(--good);border-left-color:var(--good-ink)}
+.sect[data-b="clean"] .sect-t,.sect[data-b="ok"] .sect-t{color:var(--good-ink)}
+.sect[data-b="nochange"]{background:var(--calm);border-left-color:var(--calm-ink)}
+.sect[data-b="nochange"] .sect-t{color:var(--calm-ink)}
+.filterbar button{white-space:nowrap}
+.filterbar{display:flex;gap:16px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.filterbar button{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;
+  background:var(--grey-1);border:1px solid var(--grey-2);padding:6px 11px;cursor:pointer;
+  color:var(--grey-4);border-radius:2px}
+.filterbar button:hover{border-color:var(--grey-3)}
+.filterbar button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+/* ---- downloads ---- */
+.dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:1px;
+  background:var(--grey-2);border:1px solid var(--grey-2);margin-top:8px}
+.dl{background:var(--paper);border:none;text-align:left;padding:17px 16px;cursor:pointer;
+  font-family:var(--sans);color:var(--ink);transition:background .12s}
+.dl:hover{background:var(--calm)}
+.dl:hover .dl-t{color:var(--calm-ink)}
+.dl:hover .dl-k,.dl:hover .dl-h{color:var(--calm-ink);opacity:.8}
+.dl-k{font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--grey-3);margin-bottom:7px}
+.dl-t{font-size:13.5px;font-weight:600}
+.dl-h{font-size:11.5px;color:var(--grey-4);margin-top:4px;line-height:1.45}
+
+/* ---- notices ---- */
+.notice{border-left:3px solid var(--calm-ink);background:var(--calm);
+  padding:13px 15px;font-size:13px;margin:18px 0;max-width:76ch;border-radius:0 2px 2px 0}
+.notice b{font-weight:600}
+.choice{display:flex;gap:18px;align-items:center;margin-top:11px;flex-wrap:wrap}
+.choice label{font-family:var(--sans);font-size:12.5px;letter-spacing:0;text-transform:none;
+  color:var(--ink);display:flex;gap:7px;align-items:center;cursor:pointer}
+.choice input{accent-color:var(--ink);margin:0}
+.act{background:var(--hold);border-left:3px solid var(--hold-ink);padding:15px 17px;
+  margin:18px 0;border-radius:0 2px 2px 0;max-width:78ch}
+.act-t{font-size:13.5px;font-weight:600;color:var(--hold-ink);letter-spacing:-.01em}
+.act-n{font-size:12.5px;color:var(--grey-4);margin-top:5px;line-height:1.5}
+.act .choice{margin-top:12px;gap:10px}
+.act .choice button{font-family:var(--sans);font-size:12.5px;padding:9px 15px;cursor:pointer;
+  border:1px solid var(--hold-ink);background:transparent;color:var(--hold-ink);border-radius:2px}
+.act .choice button[aria-pressed="true"]{background:var(--hold-ink);color:var(--paper)}
+.act .choice button:hover{background:rgba(138,90,29,.12)}
+.act .choice button[aria-pressed="true"]:hover{background:var(--hold-ink)}
+#importMode button{font-family:var(--sans);font-size:12.5px;padding:9px 15px;cursor:pointer;
+  border:1px solid var(--grey-2);background:var(--paper);color:var(--grey-4);border-radius:2px}
+#importMode button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+#importMode button:hover{border-color:var(--ink)}
+.picklist{border:1px solid var(--grey-2);max-height:250px;overflow:auto;min-width:340px;max-width:440px}
+.picklist .grp{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--grey-3);padding:10px 12px 5px;border-top:1px solid var(--grey-2)}
+.picklist .grp:first-child{border-top:none}
+.pick{display:flex;gap:9px;align-items:flex-start;padding:7px 12px;cursor:pointer;font-size:12.5px}
+.pick:hover{background:var(--grey-1)}
+.pick input{accent-color:var(--ink);margin:3px 0 0}
+.pick.on{background:var(--good)}
+.pick.on .pk-t{color:var(--good-ink);font-weight:500}
+.pick.on .pk-s{color:var(--good-ink);opacity:.75;font-weight:400}
+.pk-t{line-height:1.35}
+.pk-s{font-family:var(--mono);font-size:10.5px;color:var(--grey-3);display:block;margin-top:2px}
+.picked{font-family:var(--mono);font-size:11px;color:var(--ink);margin-top:8px;max-width:440px;line-height:1.55}
+.picked .none{color:var(--grey-3)}
+#f-extra{max-width:none}
+.muted{color:var(--grey-4);font-size:12.5px}
+details{margin-top:22px;border-top:1px solid var(--grey-2);padding-top:16px}
+summary{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  cursor:pointer;color:var(--grey-4)}
+summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+textarea{width:100%;height:260px;font-family:var(--mono);font-size:11.5px;line-height:1.55;
+  border:1px solid var(--grey-2);padding:13px;margin-top:14px;border-radius:0;resize:vertical}
+textarea:focus{outline:none;border-color:var(--ink)}
+.cfgbtns{display:flex;gap:10px;margin-top:11px;flex-wrap:wrap}
+.cfgbtns button{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  background:none;border:1px solid var(--grey-2);padding:8px 13px;cursor:pointer}
+.cfgbtns button:hover{border-color:var(--ink)}
+.eg{font-family:var(--mono);font-size:11px;color:var(--grey-4);margin-top:4px;
+  max-width:300px;white-space:normal;line-height:1.5}
+.eg b{font-weight:400;color:var(--ink)}
+.field{max-width:300px}
+.hidden{display:none!important}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Category Builder</h1>
+  <div class="sub">Carhartt WIP eCommerce &nbsp;/&nbsp; Commercetools category assignment &nbsp;/&nbsp; v1.1</div>
+</header>
+
+<!-- 1 MODE -->
+<section class="step">
+  <div class="step-head">
+    <div class="step-num">01</div>
+    <div><div class="step-title">What are you doing?</div>
+      <div class="step-note">Pick the situation. The options below change to match.</div></div>
+  </div>
+  <div class="step-body">
+    <div class="modecards" role="group" aria-label="What are you doing">
+      <button id="m-s2r" aria-pressed="true">
+        <span class="mc-t">Take products out of sale</span>
+        <span class="mc-d">The sale is over. Removes the sale categories and puts the products back in the regular navigation.</span>
+      </button>
+      <button id="m-r2s" aria-pressed="false">
+        <span class="mc-t">Put products into sale</span>
+        <span class="mc-d">A sale is starting. Moves products out of the regular navigation and into a campaign.</span>
+      </button>
+      <button id="m-add" aria-pressed="false">
+        <span class="mc-t">Add regular categories</span>
+        <span class="mc-d">A new season or missing assignments. Adds what PIM requires without removing existing categories.</span>
+      </button>
+      <button id="m-correct" aria-pressed="false">
+        <span class="mc-t">Correct category assignments</span>
+        <span class="mc-d">Products are in the wrong place. Removes governed categories that contradict PIM.</span>
+      </button>
+      <button id="m-val" aria-pressed="false">
+        <span class="mc-t">Just check, change nothing</span>
+        <span class="mc-d">Reports what is wrong with the categories products already have. Produces no upload file.</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- 2 FILES -->
+<section class="step">
+  <div class="step-head">
+    <div class="step-num">02</div>
+    <div>
+      <div class="step-title">Add your files</div>
+      <div class="step-note">Everything runs in this browser. No file is uploaded anywhere.</div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="drops">
+      <div class="drop" id="d-cats" tabindex="0" role="button">
+        <div class="drop-k">A</div>
+        <div class="drop-t">The category tree</div>
+        <div class="drop-h">So the tool knows which categories exist and which are switched on.<br>
+          Commercetools category export with <b>key</b>, <b>parent.key</b>, <b>custom.fields.active</b>, <b>name.en</b></div>
+        <div class="drop-s">Drop CSV or click</div>
+      </div>
+      <div class="drop" id="d-prods" tabindex="0" role="button">
+        <div class="drop-k">B</div>
+        <div class="drop-t">The product data</div>
+        <div class="drop-h"><b>Every category decision is made from this file.</b> It carries the PIM
+          attributes and the categories each product has today.<br>
+          Commercetools product export with <b>key</b>, <b>categories</b>, <b>name.en</b>,
+          <b>attributes.category_main</b>, <b>attributes.type</b>, <b>attributes.fit</b>,
+          <b>attributes.pattern</b>, <b>attributes.gender_product</b>,
+          <b>attributes.main_material_description.en</b><br>
+          <span style="color:var(--grey-3)">Simplest is to export all attributes.</span></div>
+        <div class="drop-s">Drop CSV or click</div>
+      </div>
+      <div class="drop optional" id="d-items" tabindex="0" role="button">
+        <div class="drop-k">C</div>
+        <div class="drop-t">Which products to act on</div>
+        <div class="drop-h">A list from buying. It only <b>narrows the run</b> to the products on it.
+          None of the category logic comes from here.<br>
+          All it needs is a column holding the product key.<br>
+          <span style="color:var(--grey-3)">Leave it out and every product in the middle file is processed.</span></div>
+        <div class="drop-s">Drop XLSX or CSV</div>
+      </div>
+    </div>
+
+    <div class="subhead" id="sh-items">From your item list <span>&mdash; only used to pick which products the run covers</span></div>
+    <div class="fields" id="fields">
+      <div class="field" id="f-key">
+        <label for="keyCol">Product key column</label>
+        <select id="keyCol"><option>—</option></select>
+        <div class="eg" id="eg-key"></div>
+      </div>
+      <div class="field hidden" id="f-flag">
+        <label for="flagCol">Which rows to use</label>
+        <select id="flagCol"><option value="">Use every row</option></select>
+        <div class="eg" id="eg-flag"></div>
+      </div>
+      <div class="field hidden" id="f-flagv">
+        <label for="flagVal">A row counts when the value is</label>
+        <select id="flagVal"></select>
+        <div class="eg" id="eg-flagv"></div>
+      </div>
+      <div class="field hidden" id="f-camp">
+        <label for="campaign">Which sale campaign</label>
+        <select id="campaign"></select>
+      </div>
+      <div class="field hidden" id="f-cmain">
+        <label for="cmainCol">Fallback category column</label>
+        <select id="cmainCol"></select>
+        <div class="eg" id="eg-cmain"></div>
+      </div>
+      <div class="field hidden" id="f-deliv">
+        <label for="delivCol">Delivery date column</label>
+        <select id="delivCol"></select>
+        <div class="eg" id="eg-deliv"></div>
+      </div>
+      <div class="field hidden" id="f-delivcut">
+        <label for="delivCut">Count as new if delivered by</label>
+        <input type="date" id="delivCut">
+        <div class="eg" id="eg-delivcut"></div>
+      </div>
+      <div class="field" id="f-skipsale">
+        <label for="skipSale">Products that are on sale right now</label>
+        <select id="skipSale">
+          <option value="skip">Skip them, do not touch sale products</option>
+          <option value="include">Include them in this run</option>
+        </select>
+        <div class="eg" id="eg-skipsale"></div>
+      </div>
+      <div class="field hidden" id="f-fix">
+        <label for="fixMode">Categories already on the product</label>
+        <select id="fixMode">
+          <option value="add">Leave them alone, only add what is missing</option>
+          <option value="replace">Fix them: remove what contradicts PIM</option>
+        </select>
+        <div class="eg" id="eg-fix"></div>
+      </div>
+      <div class="field hidden" id="f-extra">
+        <label>Also add</label>
+        <div class="picklist" id="extraList"></div>
+        <div class="picked" id="extraPicked"></div>
+      </div>
+      <div class="field hidden" id="f-disc">
+        <label for="discCol">Discount column</label>
+        <select id="discCol"></select>
+        <div class="eg" id="eg-disc"></div>
+      </div>
+    </div>
+
+    <button class="moretog" id="moreTog" aria-expanded="false">Show the optional settings</button>
+    <div class="plan" id="plan"></div>
+    <button class="run" id="run" disabled>Work out the categories</button>
+    <div class="muted" id="ready" style="margin-top:12px"></div>
+  </div>
+</section>
+
+<!-- 3 RESULTS -->
+<section class="step hidden" id="results">
+  <div class="step-head">
+    <div class="step-num">03</div>
+    <div>
+      <div class="step-title">Check before you upload</div>
+      <div class="step-note" id="resNote"></div>
+      <div class="step-note" id="runNote" style="font-family:var(--mono);font-size:11px;color:var(--grey-3)"></div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="counts" id="counts"></div>
+    <div id="warn"></div>
+    <div id="carryBox"></div>
+    <div class="filterbar" id="filterbar"></div>
+    <div class="ledger" id="ledger"></div>
+  </div>
+</section>
+
+<!-- 4 DOWNLOADS -->
+<section class="step hidden" id="dlSection">
+  <div class="step-head">
+    <div class="step-num">04</div>
+    <div>
+      <div class="step-title">Download</div>
+      <div class="step-note" id="dlNote"></div>
+      <div class="choice" id="importMode" style="margin:2px 0 18px">
+        <button data-i="replace" aria-pressed="true">One pass &middot; Categories = Replace</button>
+      </div>
+    </div>
+  </div>
+  <div class="step-body">
+    <div class="dls" id="dls"></div>
+  </div>
+</section>
+
+<!-- CONFIG -->
+<details>
+  <summary>Mapping rules</summary>
+  <p class="muted" style="margin:12px 0 0;max-width:76ch">The rules below add categories that
+  <span style="font-family:var(--mono)">category_main</span> can't carry on its own: denim cross-categories,
+  fit, core-product collections, and the men/women mirror for accessories. Edit here, or save the file and
+  share it with the team so everyone runs the same rules.</p>
+  <textarea id="cfg" spellcheck="false"></textarea>
+  <div class="cfgbtns">
+    <button id="cfgApply">Apply</button>
+    <button id="cfgSave">Save as file</button>
+    <button id="cfgLoad">Load file</button>
+    <button id="cfgReset">Reset to default</button>
+    <span class="muted" id="cfgMsg" style="align-self:center"></span>
+  </div>
+</details>
+</div>
+
+<input type="file" id="picker" class="hidden">
+<input type="file" id="cfgPicker" class="hidden" accept=".json">
+
+<script>
+/* ============================================================ DEFAULT RULES */
+const DEFAULT_CFG = {
+  category_main_overrides: { "atropt_category_accessories_wallets": "accessories-wallets" },
+  /* Accessories are unisex, so the accessories-* leaf is mirrored into both departments.
+     Keys that do not exist in the tree are skipped automatically. */
+  accessory_mirror: {
+    "accessories-gloves-and-scarves":["men-accessories-gloves-and-scarves","women-accessories-gloves-and-scarves"],
+    "accessories-caps":["men-accessories-caps","women-accessories-caps"],
+    "accessories-beanies":["men-accessories-beanies","women-accessories-beanies"],
+    "accessories-belts":["men-accessories-belts","women-accessories-belts"],
+    "accessories-socks":["men-accessories-socks","women-accessories-socks"],
+    "accessories-backpacks":["men-accessories-backpacks","women-accessories-backpacks"],
+    "accessories-bags":["men-accessories-bags","women-accessories-bags"],
+    "accessories-wallets":["men-accessories-wallets","women-accessories-wallets"],
+    "accessories-bucket-hats":["men-accessories-bucket-hats","women-accessories-bucket-hats"],
+    "accessories-gadgets":["men-gadgets","women-gadgets"]
+  },
+  denim_extra: {
+    men:   {pants:["men-denim-pants","men-pants-jeans"], shorts:["men-shorts-denim","men-denim-shorts"],
+            bib:["men-denim-pants"], shirts:["men-denim-shirts"], jackets:["men-denim-jackets"]},
+    women: {pants:["women-pants-denim","women-denim-pants-shorts-overalls"],
+            shorts:["women-denim-pants-shorts-overalls"], bib:["women-denim-pants-shorts-overalls"],
+            shirts:["women-denim-jackets"], jackets:["women-denim-jackets"]}
+  },
+  fit_map: {
+    "men|top_regular|tshirts":"men-tshirts-regularfit",
+    "men|top_loose|tshirts":"men-tshirts-loosefit",
+    "men|top_regular|shirts":"men-shirts-regular",
+    "men|top_loose|shirts":"men-shirts-loosefit",
+    "men|bottom_regular|pants":"men-pants-regular",
+    "men|bottom_relaxed|pants":"men-pants-relaxed",
+    "men|bottom_loose|pants":"men-pants-loose",
+    "men|bottom_slim|pants":"men-pants-slim",
+    "women|bottom_loose|pants":"women-pants-loose",
+    "women|bottom_straight|pants":"women-pants-straight"
+  },
+  fit_denim_mirror: {"men-pants-regular":"men-denim-regular","men-pants-relaxed":"men-denim-relaxed",
+                     "men-pants-loose":"men-denim-loose"},
+  /* Token in the product name -> [men key, women key]. null = not applicable for that gender.
+     Icons tokens verified against the live Icons category pages. A style can sit in more
+     than one core collection; every matching token is applied. */
+  core_products: {
+    "chase":            ["men-core-products-chase", "women-core-products-casey"],
+    "casey":            [null, "women-core-products-casey"],
+    "american script":  ["men-core-products-american-script","women-core-products-american-script"],
+    " og ":             ["men-core-products-og-styles","women-core-products-og-styles"],
+
+    "single knee":      ["men-core-products-work-pants","women-core-products-work-pants"],
+    "double knee":      ["men-core-products-work-pants","women-core-products-work-pants"],
+    "simple pant":      ["men-core-products-work-pants","women-core-products-work-pants"],
+    "knee pant":        ["men-core-products-icons","women-core-products-icons"],
+    "knee short":       ["men-core-products-icons","women-core-products-icons"],
+    "knee skirt":       [null, "women-core-products-icons"],
+
+    "michigan coat":    ["men-core-products-icons","women-core-products-icons"],
+    "detroit jacket":   ["men-core-products-icons","women-core-products-icons"],
+    "active jacket":    ["men-core-products-icons","women-core-products-icons"],
+    "vista":            ["men-core-products-icons", null],
+    "nelson t-shirt":   ["men-core-products-icons","women-core-products-icons"],
+    "essentials bag":   ["men-core-products-icons","women-core-products-icons"],
+    "acrylic watch hat":[null, "women-core-products-icons"],
+    "june":             [null, "women-core-products-icons"],
+    "brandon":          [null, "women-core-products-icons"],
+    "billie":           [null, "women-core-products-icons"],
+    "nixon":            [null, "women-core-products-icons"],
+    "maeve":            [null, "women-core-products-icons"],
+    "pocket t-shirt":   [null, "women-core-products-icons"],
+    "pocket small heart": [null, "women-core-products-icons"]
+  },
+  tshirt_basic_tokens: ["chase","casey","american script","pocket","madison","dawson","base",
+    "standard crew neck","vista","nelson","link script","duster","script mockneck","script embroidery",
+    "verner","signature script","holm","work pocket","heart patch","benton","philipa","chester","luca","embroidery"],
+  tshirt_style: {men:["men-tshirts-basic","men-tshirts-graphic-prints"],
+                 women:["women-tshirts-basic","women-tshirts-graphic"]},
+  /* Graphic is never a default bucket. A tee lands in Graphic only on positive evidence:
+     a PIM pattern value, or a name token below. Anything else gets neither category and
+     a note, so it is merchandised deliberately instead of by fallback. */
+  /* Graphic means a graphic print, nothing else. Deliberately excluded:
+       attropt_pattern_print        any printed element, including a small chest logo
+       attropt_pattern_graphic_embroidery / _embroideries   a small embroidered chest motif
+       attropt_pattern_allover_print / _striped / _checkered / _camouflage   surface pattern
+     A tee with only an embroidered duck on the chest is a basic tee, not a graphic tee.
+     attributes.pattern is multi-value, separated by semicolons; a product carrying
+     graphic_prints alongside any of the above still counts as graphic. */
+  graphic_pattern_values: ["graphic_prints","graphic_print"],
+  /* Deliberately excludes "script": Script, American Script, Signature Script and Press
+     Script are core basic tees, not graphic ones. */
+  tshirt_graphic_tokens: ["blackletter","avenue","boxed","deadline","ribbon","limn",
+    "chinsel","hatching","ice fishing","vote","blinkerfluid","framework","pennon","chez wip",
+    "hourglass","feather tree","winners","logo","graphic","artwork","motif","print"],
+  sale_group_rollup: {"overalls":"pants","dresses":"dresses-skirts","skirts":"dresses-skirts"},
+  /* Sale and regular are mutually exclusive: a product on sale must not appear in the
+     regular navigation, and vice versa. Moving between them is a swap, not an addition.
+     Set to false only if that rule ever changes. */
+  exclusive_trees: true,
+  /* Placement categories: they say where a product is merchandised, not what it is.
+     Never used as the fallback source for category_main. */
+  placement_patterns: ["-new$","-featured","core-products","collaborations"],
+  /* GOVERNED GROUPS — the basis for every removal a correction run makes.
+     A group is a set of categories the rules can determine completely from one PIM
+     attribute. Inside a governed group the derived answer is authoritative, so a member
+     that was not derived is wrong and gets removed. Outside these groups nothing is
+     removed, because the rules cannot tell a wrong category from one a merchandiser
+     added deliberately or one that is simply more specific than PIM allows.
+
+     Two safeguards, both enforced in code, not here:
+       1. A group is enforced only when the rules actually derived a member of it. If
+          attributes.pattern is empty there is no verdict on basic vs graphic, so nothing
+          in that group is touched.
+       2. Redundant parents are removed separately, since commercetools assigns them.
+
+     members: exact keys.  pattern: a regular expression over the key.
+     Add a group only when a single PIM attribute genuinely determines the whole set. */
+  governed_groups: [
+    { name:"T-shirt style", source:"attributes.pattern",
+      members:["men-tshirts-basic","men-tshirts-graphic-prints",
+               "women-tshirts-basic","women-tshirts-graphic"] },
+    { name:"Fit", source:"attributes.fit",
+      pattern:"-(regularfit|loosefit|regular|relaxed|loose|slim|straight)$" },
+    { name:"Sleeve length", source:"attributes.category_main",
+      pattern:"-tshirts-(shortsleeve|longsleeve)$" },
+    { name:"Product type", source:"attributes.category_main", product_type:true }
+  ],
+
+  /* Product type groups are mutually exclusive: a knit is not a jacket. The pairs below
+     are the legitimate exceptions, where one garment genuinely belongs in two groups. */
+  cross_group_allowed: [
+    ["shirts","jackets"],      // shirt jacs
+    ["denim","pants"], ["denim","shorts"], ["denim","jackets"], ["denim","shirts"],
+    ["overalls","pants"], ["overalls","denim"],
+    ["sweats","pants"], ["sweats","shorts"],
+    ["gadgets","accessories"]
+  ],
+  /* Additive rules: applied on top of category_main, never instead of it. For styles that
+     belong in a second category the PIM attribute does not capture, such as a polo-collared
+     sweatshirt that sits in Polos as well as Sweatshirts.
+     Token in the product name -> [men key, women key]. null = no category for that gender. */
+  /* Cross-checks: when the product name clearly says one thing and category_main says
+     another, flag it. The tool never overrides PIM here, because the name is weaker
+     evidence than the attribute. It surfaces the contradiction so PIM can be corrected.
+     Token in the name -> the category group it implies. */
+  name_vs_category: {
+    "sweater":  "knits",
+    "half zip sweater": "knits",
+    "knit":     "knits",
+    "cardigan": "knits",
+    "hoodie":   "sweats",
+    "sweatshirt":"sweats",
+    "t-shirt":  "tshirts"
+  },
+
+  name_additions: {
+    "polo": ["men-tshirts-polos", null]
+  },
+
+  /* Last resort only, when category_main is missing and nothing else matched.
+     Token in the product name -> category leaf. Every hit is flagged for checking. */
+  name_fallback: {
+    "sticker":"accessories-gadgets", "keyholder":"accessories-gadgets",
+    "key holder":"accessories-gadgets", "keychain":"accessories-gadgets",
+    "incense":"accessories-gadgets", "candle":"accessories-gadgets",
+    "ashtray":"accessories-gadgets", "mug":"accessories-gadgets",
+    "poster":"accessories-gadgets", "patch":"accessories-gadgets",
+    "skateboard":"accessories-gadgets", "towel":"accessories-gadgets",
+    "beanie":"accessories-beanies", "watch hat":"accessories-beanies",
+    "bucket hat":"accessories-bucket-hats", "cap":"accessories-caps",
+    "wallet":"accessories-wallets", "backpack":"accessories-backpacks",
+    "bag":"accessories-bags", "belt":"accessories-belts", "socks":"accessories-socks"
+  },
+  /* Buying lists a delivery drop, not a date. These are the dates those drops land on.
+     A value like "SS27 D1", "D1" or "d1" all resolve to the same date. Update each season. */
+  delivery_windows: {
+    "pre":   "2026-11-01",
+    "c-o":   "2026-11-01",
+    "co":    "2026-11-01",
+    "d1":    "2027-01-01",
+    "d2":    "2027-02-01",
+    "d3":    "2027-03-01"
+  },
+  sale_markers: ["sale","friends-family","early-access"],
+  no_fit_groups: ["shorts","swim"]
+};
+let CFG = JSON.parse(JSON.stringify(DEFAULT_CFG));
+
+/* ============================================================ STATE */
+const S = {mode:"s2r", cats:null, prods:null, items:null, rows:null, filter:"all", carryover:"hold", extras:[], fix:"add", skipSale:"skip", imp:"replace"};
+const MODE_TEXT = {
+  s2r:"Strips sale categories and assigns the regular leaf categories. Use when buying sends products back to full price.",
+  r2s:"Moves products into a sale campaign: the regular categories come off, the sale categories go on. Pick the campaign and where the discount lives.",
+  new:"Works out the regular categories from PIM and assigns them. Use it for a new season, and for correcting products that are already live. Attributes are read from the product export, or from the item list for products not in commercetools yet.",
+  val:"Changes nothing. Checks what's currently assigned for keys that don't exist, categories switched off, and parents assigned alongside their own children."
+};
+
+/* ============================================================ HELPERS */
+const $ = id => document.getElementById(id);
+const norm = s => " " + String(s||"").toLowerCase().replace(/\s+/g," ").trim() + " ";
+const uniq = a => [...new Set(a.filter(Boolean))];
+
+function isWomen(name){ return /^[Ww][\u2019']/.test(String(name||"").trim()); }
+
+/* Gender, best evidence first. The W' prefix is the house convention but it is not on
+   every record, so PIM and the product's own categories are consulted before falling
+   back to men. Returns the source so an inferred gender can be flagged. */
+function resolveGender(T, name, prod, itemRow){
+  if(isWomen(name)) return {g:"women", src:"the W\u2019 prefix"};
+
+  const pg = String(prod?.["attributes.gender_product"] || prod?.["attributes.gender_userfriendly"] || "")
+    .toLowerCase();
+  if(/women|damen|female/.test(pg)) return {g:"women", src:"the gender attribute"};
+  if(/\bmen\b|herren|male/.test(pg)) return {g:"men",   src:"the gender attribute"};
+
+  const cm = String(prod?.["attributes.category_main"]||"");
+  if(/_women_|^attropt_category_women/.test(cm)) return {g:"women", src:"category_main"};
+  if(/_men_|^attropt_category_men/.test(cm))     return {g:"men",   src:"category_main"};
+
+  // the product's own categories: only product categories count, not placement ones
+  const isPlacement = k => (CFG.placement_patterns||[]).some(p=>new RegExp(p).test(k));
+  const cur = String(prod?.["categories"]||"").split(";").map(x=>x.trim())
+    .filter(x=>x && !isPlacement(x) && !(T && isSale(T,x)));
+  const w = cur.some(k=>k.startsWith("women-")), m = cur.some(k=>k.startsWith("men-"));
+  if(w && !m) return {g:"women", src:"the categories already on the product"};
+  if(m && !w) return {g:"men",   src:"the categories already on the product"};
+
+  // buying's own list, if it carries a gender column
+  if(itemRow){
+    const col = Object.keys(itemRow).find(c=>/^gender|geschlecht/i.test(c));
+    const v = col ? String(itemRow[col]||"").toLowerCase() : "";
+    if(/women|damen|w/.test(v) && v.length<8) return {g:"women", src:"buying\u2019s gender column"};
+    if(/men|herren|m/.test(v)  && v.length<8) return {g:"men",   src:"buying\u2019s gender column"};
+  }
+  return {g:"men", src:null};   // house default
+}
+
+function toLeaf(v){
+  if(!v) return null;
+  v = String(v).trim();
+  if(!v || v==="nan") return null;
+  if(CFG.category_main_overrides[v]) return CFG.category_main_overrides[v];
+  return v.replace(/^att?ropt_category_/,"").replace(/_/g,"-");
+}
+
+/* ---- category tree ---- */
+function buildTree(rows){
+  const all=new Set(), active=new Set(), parent={}, name={};
+  for(const r of rows){
+    const k = String(r["key"]||"").trim();
+    if(!k) continue;
+    all.add(k);
+    if(String(r["custom.fields.active"]).toUpperCase()==="TRUE") active.add(k);
+    const p = r["parent.key"];
+    if(p && String(p).trim()) parent[k]=String(p).trim();
+    name[k]=r["name.en"]||"";
+  }
+  return {all,active,parent,name};
+}
+function ancestors(T,k){
+  const out=new Set(); let c=k, n=0;
+  while(T.parent[c] && n++<20){ c=T.parent[c]; out.add(c); }
+  return out;
+}
+function final0Parent(T,k,target){ return target.some(t=>ancestors(T,t).has(k)); }
+function stripParents(T,keys){
+  const anc=new Set();
+  keys.forEach(k=>ancestors(T,k).forEach(a=>anc.add(a)));
+  return keys.filter(k=>!anc.has(k));
+}
+function isSale(T,k){
+  return CFG.sale_markers.some(m => k===m || k.includes("-"+m) || k.startsWith(m+"-"));
+}
+
+/* ---- detect sale campaigns present in the tree ---- */
+function detectCampaigns(T){
+  const roots=new Map();
+  for(const k of T.all){
+    const m = k.match(/^(men|women)-(.*(?:sale|friends-family|early-access-app))$/);
+    if(m && !k.slice(m[1].length+1).includes("-30") ) roots.set(m[2], true);
+  }
+  // keep only campaigns that actually have children
+  const out=[];
+  for(const c of roots.keys()){
+    const hasChild=[...T.all].some(k=>k.startsWith("men-"+c+"-")||k.startsWith("women-"+c+"-"));
+    if(hasChild) out.push(c);
+  }
+  return out.sort();
+}
+
+/* ---- product group from a leaf key ---- */
+function groupOf(leaf){
+  if(!leaf) return null;
+  if(leaf.startsWith("accessories-")) return leaf.slice("accessories-".length);
+  const p = leaf.split("-");
+  if(p[0]==="men"||p[0]==="women"){
+    if(p[1]==="accessories") return p.slice(2).join("-");
+    return p.slice(1).join("-");
+  }
+  return p.join("-");
+}
+function groupRoot(leaf){
+  const g = groupOf(leaf); if(!g) return null;
+  return g.split("-")[0];
+}
+
+/* ---- parse a delivery date in the formats buying actually uses ---- */
+function parseDate(v){
+  if(v==null||v==="") return null;
+  // a delivery drop code such as "SS27 D1" or "Pre" resolves to the date it lands on
+  if(typeof v==="string"){
+    const t=v.trim().toLowerCase().replace(/^[a-z]{2}\d{2}\s*/,"").replace(/\s+/g,"");
+    const w=(CFG.delivery_windows||{})[t];
+    if(w) return new Date(w+"T00:00:00Z");
+  }
+  if(v instanceof Date && !isNaN(v)) return v;
+  if(typeof v==="number"){ // Excel serial
+    const d=new Date(Date.UTC(1899,11,30+Math.round(v)));
+    return isNaN(d)?null:d;
+  }
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/); // DD.MM.YYYY
+  if(m){ let y=+m[3]; if(y<100) y+=2000; return new Date(Date.UTC(y,+m[2]-1,+m[1])); }
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);                        // YYYY-MM-DD
+  if(m) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  const d=new Date(s);
+  return isNaN(d)?null:d;
+}
+
+/* ---- build a stand-in product record from the item list, for products not in CT yet ---- */
+function synth(srcRow, cmainCol){
+  if(!srcRow) return null;
+  const pick = re => { const c = Object.keys(srcRow).find(x=>re.test(x)); return c ? srcRow[c] : ""; };
+  return {
+    "name.en": pick(/description|name/i),
+    "categories": "",
+    "attributes.category_main": (cmainCol && srcRow[cmainCol]) || pick(/category.?main/i),
+    "attributes.fit": pick(/^fit|attributes\.fit/i),
+    "attributes.main_material_description.en": pick(/material/i),
+    "_synthetic": true
+  };
+}
+
+/* ============================================================ CORE: derive regular */
+function deriveRegular(T, item, prod){
+  const flags=[], keys=[];
+  const name = item.name || prod?.["name.en"] || "";
+  const gres = resolveGender(T, name, prod, item.src);
+  const g = gres.g;
+  const n = norm(name);
+  const buying = String(item.buying||"");
+  const b = buying.toLowerCase();
+  const material = String(prod?.["attributes.main_material_description.en"]||"").toLowerCase();
+
+  // category_main is the source of truth. If absent, try fallbacks in order and say
+  // which one was used. If none work, assign nothing and flag the row for review.
+  let primary = toLeaf(prod?.["attributes.category_main"]);
+  let primarySrc = primary ? "category_main" : null;
+
+  if(!primary){
+    const isPlacement = k => (CFG.placement_patterns||[]).some(p=>new RegExp(p).test(k));
+    const existing = String(prod?.["categories"]||"").split(";").map(x=>x.trim())
+      .filter(x=>x && x!=="nan" && T.all.has(x) && !isSale(T,x) && !isPlacement(x));
+    // deepest first: a leaf like men-accessories-beanies beats a shallow one
+    const leafExisting = stripParents(T, existing)
+      .sort((a,b)=>ancestors(T,b).size-ancestors(T,a).size);
+    if(leafExisting.length){ primary = leafExisting[0]; primarySrc = "the product category already on the product"; }
+  }
+  if(!primary && b.trim()){
+    const slug = b.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    const cand = [g+"-"+slug, slug].find(k=>T.all.has(k))
+      || [...T.all].find(k=>String(T.name[k]||"").toLowerCase()===b.trim().toLowerCase()
+                            && k.startsWith(g+"-") && !isSale(T,k));
+    if(cand){ primary = cand; primarySrc = "buying's category label"; }
+  }
+
+  if(!primary){
+    // 3. keyword in the product name, last resort
+    for(const [tok,cat] of Object.entries(CFG.name_fallback||{})){
+      if(n.includes(tok) && T.all.has(cat)){ primary=cat; primarySrc='the product name ("'+tok+'")'; break; }
+    }
+  }
+
+  if(primary){
+    keys.push(primary);
+    if(CFG.accessory_mirror[primary]) keys.push(...CFG.accessory_mirror[primary]);
+    if(primarySrc!=="category_main")
+      flags.push("category_main missing, used "+primarySrc+" instead, please check");
+  } else {
+    flags.push("category_main missing and no fallback worked, left empty for review");
+  }
+
+  const isAcc = !!primary && (primary.startsWith("accessories-") || primary.endsWith("-gadgets"));
+
+  // denim — "non-denim" must be tested before "denim"
+  // Denim, best evidence first. Buying's own label, then material, then the categories
+  // already on the product. Without the last one an export with no material column would
+  // silently drop every denim category the product already has.
+  let denim, denimSrc=null;
+  const curKeys = String(prod?.["categories"]||"").split(";").map(x=>x.trim()).filter(Boolean);
+  if(/non[- ]denim/.test(b))      { denim=false; denimSrc="buying label"; }
+  else if(b.includes("denim"))    { denim=true;  denimSrc="buying label"; }
+  else if(material.includes("denim")) { denim=true; denimSrc="material"; }
+  else if(curKeys.some(k=>/(^|-)denim(-|$)/.test(k))) { denim=true; denimSrc="the denim categories already on the product"; }
+  else denim=false;
+
+  const gr = groupRoot(primary) || (b.split(" ")[0]||"").toLowerCase();
+  if(denim && !isAcc){
+    const grp = /bib|overall/.test(b+" "+(primary||"")) ? "bib"
+      : gr==="shorts"||b.startsWith("swim") ? "shorts"
+      : gr==="pants" ? "pants"
+      : gr==="shirts"||b.startsWith("shirt jacs") ? "shirts"
+      : gr==="jackets" ? "jackets" : null;
+    if(grp) keys.push(...(CFG.denim_extra[g]?.[grp]||[]));
+  }
+
+  // fit
+  const fitGroup = CFG.no_fit_groups.includes(gr) ? null
+    : (gr==="tshirts"?"tshirts": gr==="shirts"?"shirts": gr==="pants"?"pants": null);
+  if(fitGroup && !isAcc){
+    const raw = String(prod?.["attributes.fit"]||"").trim();
+    const toks = (raw && raw!=="nan") ? raw.split(";").map(t=>t.trim().replace(/^attropt_fit_/,"")).filter(Boolean) : [];
+    if(!toks.length) flags.push("Note: fit missing in PIM");
+    let hit=false;
+    for(const t of toks){
+      const k = CFG.fit_map[[g,t,fitGroup].join("|")];
+      if(k){ keys.push(k); hit=true;
+        if(denim && CFG.fit_denim_mirror[k]) keys.push(CFG.fit_denim_mirror[k]); }
+    }
+    if(toks.length && !hit) flags.push("Note: no category for fit: "+toks.join(", "));
+  }
+
+  // Basic vs graphic. Only for products PIM calls a t-shirt, and only on positive evidence
+  // either way. No default: defaulting to graphic is what fills the graphic listing with
+  // plain tees, rugby shirts and sweatshirts.
+  // attributes.type is the PIM filter group and separates Shirts from T-Shirts cleanly.
+  // category_main is the cross-check; both must agree before a style category is assigned.
+  const typ = String(prod?.["attributes.type"]||"").toLowerCase();
+  const typeTee   = /filter_tshirts/.test(typ);
+  const typeShirt = /filter_shirts|filter_jackets/.test(typ);
+  const cmTee = /(^|-)tshirts(-|$)/.test(String(primary||"")) && !/polo|rugby/.test(String(primary||""));
+  const isTee = typ ? (typeTee && !typeShirt && cmTee) : cmTee;
+  if(isTee && !/polo|rugby/.test(b+" "+n)){
+    const st = CFG.tshirt_style[g];
+    if(st){
+      const patVals = String(prod?.["attributes.pattern"]||"").toLowerCase()
+        .split(";").map(x=>x.trim().replace(/^attropt_pattern_/,"")).filter(Boolean);
+      const patGraphic = patVals.some(v=>(CFG.graphic_pattern_values||[]).includes(v));
+      const patKnown   = patVals.length>0;
+      const nameGraphic = (CFG.tshirt_graphic_tokens||[]).some(t=>n.includes(t));
+      const nameBasic   = (CFG.tshirt_basic_tokens||[]).some(t=>n.includes(t));
+      // a basic token is a specific style name (Chase, Pocket, American Script) and beats
+      // a generic graphic token, which is only a hint
+      if(patGraphic)      keys.push(st[1]);
+      else if(patKnown)   keys.push(st[0]);   // pattern set, not a graphic one
+      else if(nameBasic)  keys.push(st[0]);
+      else if(nameGraphic)keys.push(st[1]);
+      else flags.push("Note: pattern not set in PIM and the name is not conclusive, "
+                     +"neither basic nor graphic assigned");
+    }
+  }
+
+  // match on a punctuation-flattened name so "Bag, Small" and "T-Shirt" behave predictably
+  const nflat = n.replace(/[,\u2019']/g," ").replace(/\s+/g," ");
+
+  // name vs category_main cross-check: never overrides PIM, only reports the conflict
+  if(primary && primarySrc==="category_main"){
+    const grpNow = groupRoot(primary) || "";
+    for(const [tok,expect] of Object.entries(CFG.name_vs_category||{})){
+      if(!(n.includes(tok) || nflat.includes(tok))) continue;
+      if(grpNow && grpNow!==expect){
+        flags.push("Name says \""+tok+"\" but category_main puts it in "+grpNow
+                  +", it may belong in "+expect);
+      }
+      break;
+    }
+  }
+
+  // additive style rules: a second category on top of category_main, never instead of it
+  for(const [tok,pair] of Object.entries(CFG.name_additions||{})){
+    if(!(n.includes(tok) || nflat.includes(tok))) continue;
+    const k = g==="women" ? pair[1] : pair[0];
+    if(k) keys.push(k);
+    else flags.push("Name says \""+tok+"\" but there is no "+g+" category for it");
+  }
+
+  // core product collections
+  for(const [tok,pair] of Object.entries(CFG.core_products)){
+    if(!(n.includes(tok) || nflat.includes(tok))) continue;
+    // accessories are unisex, so they take the core key for both departments
+    if(isAcc){ if(pair[0]) keys.push(pair[0]); if(pair[1]) keys.push(pair[1]); }
+    else { const k = g==="women"?pair[1]:pair[0]; if(k) keys.push(k); }
+  }
+
+  // validate
+  const valid=[];
+  for(const k of uniq(keys)){
+    if(!T.all.has(k)){ flags.push("Key not in tree: "+k); continue; }
+    if(!T.active.has(k)) flags.push("Category switched off: "+k);
+    valid.push(k);
+  }
+  const leaves = stripParents(T, valid);
+  if(!leaves.length) flags.push("Nothing to assign, left empty for review");
+  // only flag when gender came from something soft; the prefix, the PIM attribute and
+  // category_main are all reliable enough to pass without comment
+  const SOFT = ["the categories already on the product","buying\u2019s gender column"];
+  if(SOFT.includes(gres.src))
+    flags.push("Read as "+g+" from "+gres.src+", the name has no W\u2019 prefix, please check");
+  return {gender:g, denim, primary, primarySrc, leaves, flags, genderSrc:gres.src};
+}
+
+/* ============================================================ CORE: derive sale */
+function parseSaleDiscount(value){
+  const raw = String(value==null?"":value).trim();
+  if(!raw) return {kind:"invalid", raw};
+  if(/no\s*discount|full\s*price|not\s*discounted/i.test(raw))
+    return {kind:"no-discount", raw};
+  let n = parseFloat(raw.replace(",","."));
+  if(!Number.isFinite(n)) return {kind:"invalid", raw};
+  n = Math.abs(n);
+  // Excel stores -30% as -0.3 even though the cell displays -30%.
+  if(n>0 && n<1) n *= 100;
+  n = Math.round(n);
+  if(n===0) return {kind:"no-discount", raw};
+  return {kind:"band", band:String(n), value:n, raw};
+}
+
+function deriveSale(T, item, prod, campaign, discount){
+  const flags=[], keys=[];
+  const name = item.name || prod?.["name.en"] || "";
+  const primary = toLeaf(prod?.["attributes.category_main"]);
+  const isAcc = !!primary && (primary.startsWith("accessories-") || primary.endsWith("-gadgets"));
+  const genders = isAcc ? ["men","women"] : [resolveGender(T, name, prod, item.src).g];
+
+  const discountInfo = parseSaleDiscount(discount);
+  if(discountInfo.kind==="no-discount")
+    return {gender:genders.join("+"), primary, leaves:[], flags,
+            noDiscount:true, invalidDiscount:false};
+  if(discountInfo.kind==="invalid"){
+    flags.push("Discount missing or unreadable");
+    return {gender:genders.join("+"), primary, leaves:[], flags,
+            noDiscount:false, invalidDiscount:true};
+  }
+  const d = discountInfo.band;
+
+  // candidate product groups, best first: the leaf's own group, an explicit rollup,
+  // then each ancestor's group walking up the real category tree
+  const cands=[];
+  const g0 = groupRoot(primary);
+  if(g0){ cands.push(g0); if(CFG.sale_group_rollup?.[g0]) cands.push(CFG.sale_group_rollup[g0]); }
+  if(primary) for(const a of ancestors(T, primary)){ const ga=groupRoot(a); if(ga) cands.push(ga); }
+  if(!g0) flags.push("No category_main, cannot pick a product group");
+
+  for(const g of genders){
+    // Every campaign assignment also goes into the normal Sale navigation. For
+    // example, mid-season-sale adds both men-mid-season-sale-* and men-sale-*.
+    for(const root of uniq([g+"-"+campaign, g+"-sale"])){
+      if(!T.all.has(root)){ flags.push("Sale branch missing: "+root); continue; }
+      const k=root+"-"+d;
+      if(T.all.has(k)){ if(!T.active.has(k)) flags.push("Category switched off: "+k); keys.push(k); }
+      else flags.push("No sale category for "+d+"% under "+root);
+      const hit = uniq(cands).map(c=>root+"-"+c).find(k=>T.all.has(k));
+      if(hit){ if(!T.active.has(hit)) flags.push("Category switched off: "+hit); keys.push(hit); }
+      else if(g0) flags.push("No sale category for "+g0+" under "+root);
+    }
+  }
+  // Unisex accessories are also discoverable from the normal accessories Sale root.
+  if(isAcc){
+    const u = campaign.replace(/^(men|women)-/,"");
+    for(const cand of ["accessories-"+u, u+"-accessories"]) if(T.all.has(cand)) keys.push(cand);
+    if(T.all.has("accessories-sale")) keys.push("accessories-sale");
+  }
+  const leaves = stripParents(T, uniq(keys));
+  if(!leaves.length) flags.push("No categories produced");
+  return {gender:genders.join("+"), primary, leaves, flags,
+          noDiscount:false, invalidDiscount:false};
+}
+
+/* ============================================================ RUN */
+function run(){
+  const T = buildTree(S.cats.rows);
+  const prodBy = {};
+  let lastKey=null;
+  for(const r of S.prods.rows){
+    let k = String(r["key"]||"").trim();
+    if(k) lastKey=k; else k=lastKey;              // CT exports repeat the key only on the master row
+    if(!k) continue;
+    if(!prodBy[k]) prodBy[k]=r;
+  }
+
+  // which products to process
+  let targets=[];
+  if(S.items){
+    const kc = $("keyCol").value, fc = $("flagCol").value, dc = $("discCol")?.value;
+    const nameCol = S.items.cols.find(c=>/description|name|item/i.test(c)) || kc;
+    const buyCol  = S.items.cols.find(c=>/^category$/i.test(c)) || "";
+    for(const r of S.items.rows){
+      if(fc && !isMarked(r[fc])) continue;
+      const k = String(r[kc]||"").trim();
+      if(!k) continue;
+      const prev = targets.find(t=>t.key===k);
+      if(prev){
+        // a product can appear on several rows, one per drop; the earliest one wins
+        const dc2=$("delivCol")?.value;
+        if(dc2){
+          const a=parseDate(prev.src?.[dc2]), b=parseDate(r[dc2]);
+          if(b && (!a || b<a)) prev.src = r;
+        }
+        continue;
+      }
+      targets.push({key:k, name:r[nameCol], buying:buyCol?r[buyCol]:"", disc:dc?r[dc]:null, src:r});
+    }
+  } else {
+    for(const k of Object.keys(prodBy)) targets.push({key:k, name:prodBy[k]["name.en"], buying:"", disc:null});
+  }
+
+  const campaign = $("campaign").value;
+  const rows=[];
+  const cmainCol = $("cmainCol")?.value || "";
+  const extras = S.extras.slice();
+  const delivCol = $("delivCol")?.value || "";
+  const cutRaw   = $("delivCut")?.value || "";
+  const cutoff   = cutRaw ? parseDate(cutRaw) : null;
+  const skipSale = ($("skipSale")?.value || "skip") === "skip";
+  let skippedSale = 0;
+  for(const t of targets){
+    let prod = prodBy[t.key];
+    if(skipSale && S.mode!=="r2s"){
+      const c0 = String(prod?.["categories"]||"").split(";").map(x=>x.trim()).filter(Boolean);
+      if(c0.some(k=>isSale(T,k))){ skippedSale++; continue; }
+    }
+    if(S.mode==="new"){
+      const fb = synth(t.src, cmainCol);
+      if(!prod) prod = fb;
+      else if(fb){ // fill only what CT is missing
+        for(const f of ["attributes.category_main","attributes.fit","attributes.main_material_description.en"])
+          if(!String(prod[f]||"").trim() && fb[f]) prod = Object.assign({}, prod, {[f]: fb[f]});
+      }
+    }
+    const cur = String(prod?.["categories"]||"").split(";").map(x=>x.trim()).filter(x=>x&&x!=="nan");
+    const flags=[];
+    if(!prod) flags.push("Not found in product export");
+    else if(prod._synthetic) flags.push("Not in Commercetools yet, attributes read from the item list");
+
+    let add=[], removed=[], kept=[], primary=null, gender="", excluded=false;
+    if(S.mode==="val"){
+      kept = cur;
+      for(const k of cur){
+        if(!T.all.has(k)) flags.push("Key not in tree: "+k);
+        else if(!T.active.has(k)) flags.push("Category switched off: "+k);
+      }
+      const redundant = cur.filter(k=>cur.some(o=>o!==k && ancestors(T,o).has(k)));
+      if(redundant.length) flags.push("Parent assigned alongside its child: "+redundant.join(", "));
+      const inSale=cur.filter(k=>isSale(T,k)), inReg=cur.filter(k=>!isSale(T,k));
+      if(CFG.exclusive_trees && inSale.length && inReg.length)
+        flags.push("In both trees at once, visible in sale and in regular navigation: "+inReg.join(", "));
+      // products sitting in a basic/graphic listing that PIM does not call a t-shirt
+      const styleKeys = Object.values(CFG.tshirt_style||{}).flat();
+      const inStyle = cur.filter(k=>styleKeys.includes(k));
+      if(inStyle.length){
+        const cm = toLeaf(prod?.["attributes.category_main"]) || "";
+        if(cm && !/(^|-)tshirts(-|$)/.test(cm))
+          flags.push("In "+inStyle.join(", ")+" but category_main says "+cm+", it is not a t-shirt");
+      }
+      // category_main pointing at a parent rather than a subcategory
+      const cmLeaf = toLeaf(prod?.["attributes.category_main"]);
+      if(cmLeaf && T.all.has(cmLeaf)){
+        const kids=[...T.all].filter(k=>T.parent[k]===cmLeaf && T.active.has(k));
+        if(kids.length)
+          flags.push("category_main points at "+cmLeaf+", a parent with "+kids.length
+                    +" subcategories, so the product only lands on the top listing");
+      }
+      const unknown = cur.filter(k=>!T.all.has(k));
+      if(unknown.length)
+        flags.push("Not in this category export, it may be newer than the export: "+unknown.join(", "));
+      if(!cur.length) flags.push("No categories at all");
+      primary = toLeaf(prod?.["attributes.category_main"]);
+    } else if(S.mode==="s2r" || S.mode==="new"){
+      const d = deriveRegular(T, t, prod);
+      flags.push(...d.flags); primary=d.primary; gender=d.gender;
+      if(S.mode==="new"){
+        removed = [];
+        kept    = cur;
+        let leaves = d.leaves.slice();
+        for(const extraCat of extras){
+          // when a delivery column is set, only items delivering on or before the
+          // cutoff count as new arrivals
+          let eligible = true, delivNote = null;
+          if(delivCol){
+            const d = parseDate(t.src?.[delivCol]);
+            if(!d){ eligible=false; delivNote="no readable delivery date, new arrivals not applied"; }
+            else if(cutoff && d>cutoff){ eligible=false;
+              delivNote="delivers "+d.toISOString().slice(0,10)+", after the cutoff"; }
+          }
+          if(delivNote && !flags.includes("Note: "+delivNote)) flags.push("Note: "+delivNote);
+          if(!eligible){ /* skip the extra category */ }
+          else if(extraCat==="__new__"){
+            const isAcc = d.primary && (d.primary.startsWith("accessories-")||d.primary.endsWith("-gadgets"));
+            for(const k of (isAcc?["accessories-new","men-new","women-new"]:[d.gender+"-new"]))
+              if(T.all.has(k)) leaves.push(k);
+          } else if(extraCat.startsWith("__slot__")){
+            const sfx=extraCat.slice(8);
+            const isAcc2 = d.primary && (d.primary.startsWith("accessories-")||d.primary.endsWith("-gadgets"));
+            const want = isAcc2 ? ["men","women"] : [d.gender];
+            let placed=false;
+            for(const w of want){
+              const k=w+"-featured-"+sfx;
+              if(T.all.has(k)){ leaves.push(k); placed=true; }
+            }
+            if(!placed) flags.push("No featured slot "+sfx+" for "+d.gender);
+          } else if(T.all.has(extraCat)) leaves.push(extraCat);
+        }
+        // A genuinely new product has nothing on it. If it already carries sale
+        // categories it is a returning style, not a new one, so flag it rather than
+        // adding regular categories on top and leaving it in both trees.
+        const saleOn = cur.filter(k=>isSale(T,k));
+        if(CFG.exclusive_trees && saleOn.length && S.carryover!=="move"){
+          flags.push("Already in sale categories, this is a returning style. Held back \u2014 switch the option above to move it out of sale: "+saleOn.join(", "));
+          removed = []; kept = cur; add = [];
+        } else if(CFG.exclusive_trees && saleOn.length){
+          const keepAll = cur.filter(k=>!isSale(T,k));
+          const target  = stripParents(T, uniq([...keepAll, ...leaves]));
+          removed = uniq([...saleOn, ...keepAll.filter(k=>!target.includes(k))]);
+          kept    = keepAll.filter(k=>target.includes(k));
+          add     = target.filter(k=>!kept.includes(k));
+          flags.push("Was in sale, moved out of sale and into the regular categories");
+        } else if(S.fix==="replace"){
+          // Correction pass. It removes only what genuinely contradicts the derived set:
+          //   - a competing member of an exclusive set (basic vs graphic)
+          //   - a redundant parent, which commercetools assigns anyway
+          // Everything else stays. A subcategory the rules could not derive because
+          // category_main points at the parent is MORE specific than the derived key,
+          // not wrong, so replacing it with the parent would lose information.
+          const isPlacement = k => (CFG.placement_patterns||[]).some(p=>new RegExp(p).test(k));
+          // product type: the top-level bucket a key belongs to, from the tree path
+          const typeOf = key => {
+            const g = groupRoot(key);
+            return g ? g.split("-")[0] : null;
+          };
+          const derivedType = typeOf(d.primary || leaves[0] || "");
+          const allowedWith = t => (CFG.cross_group_allowed||[]).some(pair =>
+            pair.includes(t) && pair.includes(derivedType));
+          const inGroup = (k,grp) => {
+            if(grp.product_type){
+              if(!derivedType) return false;
+              const t = typeOf(k);
+              return !!t && t!==derivedType && !allowedWith(t);
+            }
+            return grp.members ? grp.members.includes(k) : new RegExp(grp.pattern).test(k);
+          };
+          // a group only has authority when the rules actually reached a verdict in it
+          const active = (CFG.governed_groups||[]).filter(grp =>
+            grp.product_type ? !!derivedType : leaves.some(l=>inGroup(l,grp)));
+          const wrong = k => active.some(grp => inGroup(k,grp) && !leaves.includes(k));
+          const keepCur = cur.filter(k => isPlacement(k) || isSale(T,k) || !wrong(k));
+          const target  = stripParents(T, uniq([...keepCur, ...leaves]));
+          removed = cur.filter(k=>!target.includes(k));
+          kept    = cur.filter(k=>target.includes(k));
+          add     = target.filter(k=>!kept.includes(k));
+          const parentsOnly = removed.filter(k=>final0Parent(T,k,target));
+          const contradictions = removed.filter(k=>!parentsOnly.includes(k));
+          for(const k of contradictions){
+            const grp = active.find(g=>inGroup(k,g));
+            flags.push("Correction: removed "+k+" \u2014 "+(grp?grp.name:"rule")
+                      +" is set from "+(grp?grp.source:"PIM")+", which gives "
+                      +leaves.filter(l=>grp&&inGroup(l,grp)).join(", "));
+          }
+          if(parentsOnly.length)
+            flags.push("Note: removed redundant parent "+parentsOnly.join(", ")
+                      +", commercetools assigns it automatically");
+        } else {
+          const target = stripParents(T, uniq([...cur, ...leaves]));
+          removed = cur.filter(k=>!target.includes(k));   // redundant parents only
+          kept    = cur.filter(k=>target.includes(k));
+          add     = target.filter(k=>!kept.includes(k));
+        }
+      } else {
+        // Rebuild the whole set leaf-only, so redundant parents already on the
+        // product are dropped rather than carried forward.
+        const keepAll = cur.filter(k=>!isSale(T,k));
+        const target  = stripParents(T, uniq([...keepAll, ...d.leaves]));
+        removed = uniq([...cur.filter(k=>isSale(T,k)),
+                        ...keepAll.filter(k=>!target.includes(k))]);
+        kept    = keepAll.filter(k=>target.includes(k));
+        add     = target.filter(k=>!kept.includes(k));
+      }
+    } else {
+      const d = deriveSale(T, t, prod, campaign, t.disc);
+      flags.push(...d.flags); primary=d.primary; gender=d.gender;
+      if(d.noDiscount){
+        // Buying explicitly says this row is not part of the sale. Keep it out of
+        // the upload rather than treating the text as a broken discount value.
+        kept=cur; excluded=true;
+        flags.push("Note: Buying says no discount, left out of the sale upload");
+      } else if(d.invalidDiscount){
+        kept=cur;
+      } else {
+        // a product entering sale leaves the regular tree entirely
+        const carry  = CFG.exclusive_trees ? cur.filter(k=>isSale(T,k)) : cur;
+        const target = stripParents(T, uniq([...carry, ...d.leaves]));
+        removed = cur.filter(k=>!target.includes(k));
+        kept    = cur.filter(k=>target.includes(k));
+        add     = target.filter(k=>!kept.includes(k));
+        if(CFG.exclusive_trees && cur.some(k=>!isSale(T,k)))
+          flags.push("Note: regular categories removed, this product moves into sale");
+      }
+    }
+
+    const final = S.mode==="val" ? cur : stripParents(T, uniq([...kept, ...add]));
+    if(S.mode!=="val"){
+      const pd = removed.filter(k=>!isSale(T,k) && final.some(f=>ancestors(T,f).has(k)));
+      if(pd.length) flags.push("Note: redundant parent removed, commercetools assigns it automatically: "+pd.join(", "));
+    }
+    rows.push({key:t.key, name:t.name||prod?.["name.en"]||"", buying:t.buying, gender,
+      primary:primary||"", fit:String(prod?.["attributes.fit"]||"").replace(/attropt_fit_/g,""),
+      current:cur, removed, kept, add, final,
+      flags:uniq(flags).filter(f=>!f.startsWith("Note:")),
+      notes:uniq(flags).filter(f=>f.startsWith("Note:")).map(f=>f.slice(6)),
+      excluded,
+      changed: S.mode!=="val" && (add.length>0 || removed.length>0)});
+  }
+  S.rows = rows;
+  S.tree = T;
+  S.skippedSale = skippedSale;
+  const now=new Date();
+  S.runStamp = now.toISOString().slice(0,10).replace(/-/g,"") + "-"
+             + String(now.getHours()).padStart(2,"0") + String(now.getMinutes()).padStart(2,"0")
+             + String(now.getSeconds()).padStart(2,"0");
+  render();
+}
+
+/* ============================================================ RENDER */
+function render(){
+  const rows=S.rows, T=S.tree;
+  $("results").classList.remove("hidden");
+  $("dlSection").classList.remove("hidden");
+
+  const rev = rows.filter(r=>r.flags.length).length;
+  const chg = rows.filter(r=>r.changed).length;
+  const counts = S.mode==="val"
+    ? [["Products",rows.length],["Clean",rows.length-rev],["Need attention",rev,true]]
+    : [["Products",rows.length],["Changed",chg],["No discount",rows.filter(r=>r.excluded).length],
+       ["Categories added",rows.reduce((a,r)=>a+r.add.length,0)],
+       ["Removed",rows.reduce((a,r)=>a+r.removed.length,0)],
+       ["Held back",rows.filter(r=>r.changed&&!r.final.length).length,true],
+       ["Need review",rev,true]];
+  $("counts").innerHTML = counts.map(([l,n,f])=>
+    `<div class="count${f?" flag":""}"><div class="count-n">${n}</div><div class="count-l">${l}</div></div>`).join("");
+
+  $("resNote").textContent = S.mode==="val"
+    ? "Nothing is written. This is a read of what's on the products now."
+    : "Open the flagged rows first. Struck-through categories are removed, filled ones are added.";
+
+  // preservation warning
+  const atRisk = rows.filter(r=>r.kept.length>0).length;
+  $("warn").innerHTML = (S.mode==="s2r" && rows.length)
+    ? `<div class="notice"><b>${atRisk} of ${rows.length} products have non-sale categories already assigned.</b>
+       Those are carried into the final set, so the delete pass won't lose collabs, collections, or new arrivals.</div>` : "";
+
+  $("runNote").textContent = "Run "+S.runStamp+" \u00b7 every file below is stamped with it"
+    + (S.skippedSale ? " \u00b7 "+S.skippedSale+" products in sale were left out" : "");
+  drawCarryover();
+  drawLedger();
+  drawDownloads();
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* New season runs sometimes contain returning styles that are still in sale.
+   Let the person decide what happens to them rather than guessing. */
+function drawCarryover(){
+  const box=$("carryBox");
+  if(S.mode!=="new"){ box.innerHTML=""; return; }
+  const hit=S.rows.filter(r=>r.flags.some(f=>/sale categories|out of sale/.test(f)));
+  const n=hit.length;
+  if(!n){ box.innerHTML=""; return; }
+  const eg=hit.slice(0,3).map(r=>r.key).join(", ") + (n>3?` and ${n-3} more`:"");
+  box.innerHTML=`<div class="act">
+    <div class="act-t">${n} ${n===1?"product is":"products are"} still in sale categories</div>
+    <div class="act-n">${eg}<br>
+      A product can't be in sale and in the regular navigation at once. Decide what happens
+      to these before you download.</div>
+    <div class="choice">
+      <button data-c="hold" aria-pressed="${S.carryover==="hold"}">Hold back, handle separately</button>
+      <button data-c="move" aria-pressed="${S.carryover==="move"}">Remove sale, assign regular categories</button>
+    </div></div>`;
+  box.querySelectorAll("button").forEach(b=>b.onclick=()=>{ S.carryover=b.dataset.c; run(); });
+}
+
+/* Each row lands in exactly one bucket, ordered worst first. */
+function bucketOf(r){
+  if(S.mode==="val") return r.flags.length ? "attention" : "ok";
+  if(r.excluded) return "excluded";
+  if(r.changed && !r.final.length) return "empty";
+  if(!r.changed && r.flags.length) return "held";
+  if(r.flags.length) return "check";
+  return r.changed ? "clean" : "nochange";
+}
+const BUCKETS = {
+  excluded: {t:"Not discounted",            n:"Buying marks these as NO DISCOUNT. They stay unchanged and are not included in the sale upload."},
+  empty:    {t:"Nothing to assign",       n:"No categories could be worked out. Held back from the upload files so these can't be emptied on site."},
+  held:     {t:"Held back",               n:"Left unchanged on purpose. Usually a returning style still in sale."},
+  check:    {t:"Assigned, worth a look",  n:"Categories were produced, but something in the row needs a human eye."},
+  clean:    {t:"Ready to upload",         n:"Derived cleanly, nothing flagged."},
+  nochange: {t:"No change needed",        n:"Already correct. Not in the upload files."},
+  attention:{t:"Needs attention",         n:"Something is wrong with what is currently assigned."},
+  ok:       {t:"Nothing wrong",           n:"Current assignments look fine."}
+};
+const BUCKET_ORDER = ["empty","held","check","attention","clean","excluded","nochange","ok"];
+
+/* Hundreds of rows are unreadable one by one, and most of them say the same thing.
+   Rows are collapsed into patterns: same categories added, same removed, same flags.
+   One line per pattern, expandable to the products underneath. */
+function patternKey(r){
+  return [r.removed.join(","), r.add.join(","), r.flags.join(" | ")].join("||");
+}
+
+function drawLedger(){
+  const all=S.rows;
+  const groups={};
+  for(const r of all){ const b=bucketOf(r); (groups[b]=groups[b]||[]).push(r); }
+  const present = BUCKET_ORDER.filter(b=>groups[b]&&groups[b].length);
+
+  $("filterbar").innerHTML =
+    `<button data-b="all" aria-pressed="${S.filter==="all"}">All (${all.length})</button>`
+    + present.map(b=>`<button data-b="${b}" aria-pressed="${S.filter===b}">${BUCKETS[b].t} (${groups[b].length})</button>`).join("");
+  $("filterbar").querySelectorAll("button").forEach(btn=>btn.onclick=()=>{ S.filter=btn.dataset.b; drawLedger(); });
+
+  const show = (S.filter==="all"||!groups[S.filter]) ? present : [S.filter];
+  const chip=(k,c)=>`<span class="cat ${c}">${k}</span>`;
+  const esc=s=>String(s||"").replace(/</g,"&lt;");
+  let html="";
+
+  for(const b of show){
+    const rows=groups[b];
+
+    const inline = (b==="held" && S.mode==="new" && rows.some(r=>r.flags.some(f=>/sale categories/.test(f))))
+      ? `<div class="choice" style="margin-top:11px">
+           <button data-c="move" style="font-family:var(--sans);font-size:12.5px;padding:8px 14px;
+             border:1px solid var(--hold-ink);background:var(--hold-ink);color:var(--paper);
+             border-radius:2px;cursor:pointer">Remove sale and assign regular categories instead</button>
+         </div>` : "";
+    html += `<div class="sect" data-b="${b}"><div class="sect-t">${BUCKETS[b].t} \u00b7 ${rows.length}</div>
+             <div class="sect-n">${BUCKETS[b].n}</div>${inline}</div>`;
+
+    // collapse into patterns, biggest first
+    const pats=new Map();
+    for(const r of rows){
+      const k=patternKey(r);
+      if(!pats.has(k)) pats.set(k,{removed:r.removed, add:r.add, flags:r.flags, notes:r.notes||[], items:[]});
+      pats.get(k).items.push(r);
+    }
+    const sorted=[...pats.values()].sort((a,b2)=>b2.items.length-a.items.length);
+
+    for(const p of sorted){
+      const chips = p.removed.map(k=>chip(k,"rm")).join("")
+                  + p.add.map(k=>chip(k,"add")).join("");
+      const one = p.items.length===1;
+      const meta = one
+        ? `<span class="pat-item"><span class="k">${p.items[0].key}</span>
+             <span class="nm">${esc(p.items[0].name)}</span></span>`
+        : `${p.items.length} products`;
+      const ITEM_LIM=25;
+      const list = p.items.slice(0,ITEM_LIM).map(r=>
+        `<div class="pat-item"><span class="k">${r.key}</span><span class="nm">${esc(r.name)}</span></div>`).join("")
+        + (p.items.length>ITEM_LIM
+            ? `<div class="pat-more">${p.items.length-ITEM_LIM} more, all in the review file</div>` : "");
+
+      html += `<details class="pat"${one?"":""}>
+        <summary class="pat-h">
+          <span class="pat-n">${p.items.length}</span>
+          <span class="pat-b">
+            <span class="pat-cats">${chips || '<span class="pat-meta">no category change</span>'}</span>
+            <span class="pat-meta">${meta}</span>
+            ${p.flags.length?`<div class="lflag">${p.flags.join(" \u00b7 ")}</div>`:""}
+            ${p.notes.length?`<div class="lnote">${p.notes.join(" \u00b7 ")}</div>`:""}
+          </span>
+          <span class="pat-x"></span>
+        </summary>
+        <div class="pat-items">${list}</div>
+      </details>`;
+    }
+  }
+
+  $("ledger").innerHTML = html;
+  $("ledger").querySelectorAll(".sect .choice button").forEach(btn=>btn.onclick=()=>{
+    S.carryover=btn.dataset.c; run();
+  });
+}
+
+/* ============================================================ DOWNLOADS */
+function csv(rows){ return Papa.unparse(rows); }
+function dl(name, text, type){
+  const b=new Blob([text],{type:type||"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+/* Files are named after the run that produced them, not the moment of download, so a
+   delete file and a category file from different runs are visibly different. */
+const stamp = () => S.runStamp || new Date().toISOString().slice(0,10).replace(/-/g,"");
+
+function reviewSheet(){
+  return S.rows.map(r=>({
+    key:r.key, product:r.name, buying_category:r.buying, gender:r.gender,
+    category_main:r.primary, fit:r.fit,
+    current_categories:r.current.join(";"), sale_removed:r.removed.join(";"),
+    preserved:r.kept.join(";"), added:r.add.join(";"), final_categories:r.final.join(";"),
+    group:(BUCKETS[bucketOf(r)]||{}).t||"", n_final:r.final.length,
+    changed:r.changed?"yes":"", excluded_from_sale:r.excluded?"yes":"", flags:r.flags.join(" | "),
+    notes:(r.notes||[]).join(" | ")
+  }));
+}
+function drawImportMode(){
+  const box=$("importMode"); if(!box) return;
+  box.querySelectorAll("button").forEach(b=>{
+    b.setAttribute("aria-pressed", String(S.imp===b.dataset.i));
+    b.onclick=()=>{ S.imp=b.dataset.i; drawImportMode(); drawDownloads(); };
+  });
+  $("dlNote").innerHTML = S.imp==="replace"
+    ? "In the commercetools importer set <b>List\u2019s update behaviour \u2192 Categories \u2192 Replace</b>, "
+      + "then upload the category file on its own. The file holds the complete final set for each product, "
+      + "so anything not in it is removed in the same pass. Products are never left uncategorised."
+    : "Upload the delete file first, then the category file with <b>Categories \u2192 Merge</b>. "
+      + "Between the two uploads the affected products have no categories and are not visible on site.";
+}
+
+function drawDownloads(){
+  const val = S.mode==="val";
+  drawImportMode();
+  $("importMode").classList.toggle("hidden", val);
+  const files = val ? [
+    ["A","Findings","Every product with what's assigned now and what's wrong with it","review"]
+  ] : S.imp==="replace" ? [
+    ["01","Category file","The complete final set per product. Upload with Categories = Replace","cats"],
+    ["02","Review file","Full detail with flags. Keep for the record","review"],
+    ["03","Rollback","Exact current state, upload the same way to undo","rollback"]
+  ] : S.mode==="new" ? (
+    S.rows.some(r=>r.removed.length) ? [
+      ["01","Delete pass","For products losing a category. Upload first","delete"],
+      ["02","Category pass","The categories to assign. Upload second","cats"],
+      ["03","Review file","Full detail with flags. Keep for the record","review"],
+      ["04","Rollback","Whatever these products carry today","rollback"]
+    ] : [
+      ["01","Category pass","The categories to assign. Nothing is deleted","cats"],
+      ["02","Review file","Full detail with flags. Keep for the record","review"],
+      ["03","Rollback","Whatever these products carry today","rollback"]
+    ]
+  ) : [
+    ["01","Delete pass","Wipes categories. Upload this first","delete"],
+    ["02","Category pass","The final category set. Upload this second","cats"],
+    ["03","Review file","Full detail with flags. Keep for the record","review"],
+    ["04","Rollback","Exact current state, ready to re-upload","rollback"]
+  ];
+  $("dls").innerHTML = files.map(([k,t,h,id])=>
+    `<button class="dl" data-f="${id}"><div class="dl-k">${k}</div><div class="dl-t">${t}</div><div class="dl-h">${h}</div></button>`).join("");
+  $("dls").querySelectorAll("button").forEach(b=>b.onclick=()=>doDownload(b.dataset.f));
+}
+function doDownload(which){
+  const d=stamp();
+  // a product with an empty final set must never reach the upload files:
+  // deleting its categories would remove it from the site
+  const safe = S.rows.filter(r=>r.changed && r.final.length);
+  if(which==="delete")
+    dl(`01_delete_${d}.csv`, csv(safe.filter(r=>r.removed.length).map(r=>({key:r.key, categories:"[DELETE]"}))));
+  else if(which==="cats")
+    dl(`02_categories_${d}.csv`, csv(safe.map(r=>({key:r.key, categories:r.final.join(";")}))));
+  else if(which==="rollback")
+    dl(`04_rollback_${d}.csv`, csv(S.rows.map(r=>({key:r.key, categories:r.current.join(";")}))));
+  else {
+    const wb=XLSX.utils.book_new();
+    const data=reviewSheet();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Review");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data.filter(r=>r.flags)), "Needs review");
+    const fc={}; S.rows.forEach(r=>[...r.flags,...(r.notes||[]).map(n=>"Note: "+n)]
+      .forEach(f=>{const g=f.split(":").slice(0,2).join(":");fc[g]=(fc[g]||0)+1;}));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      Object.entries(fc).sort((a,b)=>b[1]-a[1]).map(([flag,count])=>({flag,count}))), "Flag summary");
+    const audit={};
+    S.rows.forEach(r=>{const k=(r.buying||r.primary)+" | "+r.gender;
+      if(!audit[k]) audit[k]={pattern:k, items:0, example_key:r.key, example_output:r.final.join(";")};
+      audit[k].items++;});
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(audit)), "Mapping audit");
+    XLSX.writeFile(wb, `03_review_${d}.xlsx`);
+  }
+}
+
+/* ============================================================ FILE INTAKE */
+/* Some Merchant Center exports wrap every cell as ="value" and prepend a BOM.
+   Strip both so either export style works. */
+function unwrap(v){
+  if(typeof v!=="string") return v;
+  let s=v.replace(/^\uFEFF/,"").trim();
+  const m=s.match(/^=\s*"([\s\S]*)"$/);
+  if(m) s=m[1].replace(/""/g,'"');
+  return s;
+}
+/* Header cells often contain line breaks ("Earliest\nDel. Date\n(SS27)"). A <select>
+   normalises whitespace in its option text, so the value read back never matched the
+   real key and every lookup came back empty. Flatten headers on load instead. */
+function flattenHeaders(res){
+  const map = new Map();
+  const cols = res.cols.map(c=>{
+    const clean = String(c??"").replace(/\s+/g," ").trim();
+    map.set(c, clean);
+    return clean;
+  });
+  if(cols.every((c,i)=>c===res.cols[i])) return res;
+  const rows = res.rows.map(r=>{
+    const o={};
+    for(const [orig,clean] of map) o[clean] = r[orig];
+    return o;
+  });
+  return {...res, rows, cols};
+}
+
+function cleanTable(res){
+  const wrapped = res.cols.some(c=>/^=\s*"/.test(String(c||"").replace(/^\uFEFF/,"")));
+  const cols = res.cols.map(unwrap);
+  if(!wrapped){ return flattenHeaders({rows:res.rows, cols}); }
+  const rows = res.rows.map(r=>{
+    const o={};
+    res.cols.forEach((c,i)=>{ o[cols[i]] = unwrap(r[c]); });
+    return o;
+  });
+  return flattenHeaders({rows, cols, unwrapped:true});
+}
+
+function readFile(file, cb){
+  const ext=file.name.split(".").pop().toLowerCase();
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      if(ext==="csv"||ext==="txt"){
+        const p=Papa.parse(e.target.result,{header:true,skipEmptyLines:true});
+        cb(cleanTable({rows:p.data, cols:p.meta.fields||[]}));
+      } else {
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        cb(cleanTable({rows, cols:Object.keys(rows[0]||{})}));
+      }
+    }catch(err){ cb(null, err.message); }
+  };
+  if(ext==="csv"||ext==="txt") rd.readAsText(file); else rd.readAsArrayBuffer(file);
+}
+
+function wireDrop(elId, slot, validate){
+  const el=$(elId);
+  const optional = elId==="d-items";
+  const reset=()=>{
+    S[slot]=null;
+    el.className="drop"+(optional?" optional":"");
+    el.querySelector(".drop-s").textContent = optional ? "Drop XLSX or CSV" : "Drop CSV or click";
+    const b=el.querySelector(".clear"); if(b) b.remove();
+    if(slot==="items"){ S.rows=null; S._keySet=null;
+      ["keyCol","flagCol","flagVal","discCol","cmainCol","delivCol"].forEach(i=>{ const e=$(i); if(e) e.dataset.touched="0"; }); $("results").classList.add("hidden"); $("dlSection").classList.add("hidden"); }
+    afterLoad();
+  };
+  const addClear=()=>{
+    if(el.querySelector(".clear")) return;
+    const b=document.createElement("button");
+    b.className="clear"; b.type="button"; b.title="Remove this file"; b.setAttribute("aria-label","Remove this file");
+    b.textContent="\u00d7";
+    b.onclick=e=>{ e.stopPropagation(); reset(); };
+    el.appendChild(b);
+  };
+  const open=()=>{ const p=$("picker"); p.value=""; p.onchange=()=>p.files[0]&&take(p.files[0]); p.click(); };
+  const take=f=>{
+    readFile(f,(res,err)=>{
+      const s=el.querySelector(".drop-s");
+      if(!res){ el.className="drop err"+(optional?" optional":""); s.textContent="Couldn't read: "+err; addClear(); return; }
+      const problem = validate ? validate(res) : null;
+      const soft = problem && /^Loaded, but/.test(problem);
+      if(problem && !soft){ el.className="drop err"+(optional?" optional":""); s.textContent=problem; S[slot]=null; }
+      else if(soft){ el.className="drop err"+(optional?" optional":"");
+             s.textContent=`${f.name} · ${res.rows.length} rows · ${problem}`; S[slot]=res; }
+      else { if(slot==="items"||slot==="prods"){ S._keySet=null;
+               if(slot==="items") ["keyCol","flagCol","flagVal","discCol","cmainCol","delivCol"]
+                 .forEach(i=>{ const e=$(i); if(e) e.dataset.touched="0"; }); }
+             el.className="drop loaded"+(optional?" optional":"");
+             s.textContent=`${f.name} · ${res.rows.length} rows${res.unwrapped?" · unwrapped":""}`; S[slot]=res; }
+      addClear();
+      afterLoad();
+    });
+  };
+  el.onclick=open;
+  el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
+  el.ondragover=e=>{e.preventDefault();el.classList.add("over");};
+  el.ondragleave=()=>el.classList.remove("over");
+  el.ondrop=e=>{e.preventDefault();el.classList.remove("over"); e.dataTransfer.files[0]&&take(e.dataTransfer.files[0]);};
+}
+
+const need = (res,cols) => {
+  const missing = cols.filter(c=>!res.cols.includes(c));
+  if(!missing.length) return null;
+  const near = missing.map(m=>{
+    const alt=res.cols.find(c=>c.toLowerCase().replace(/[^a-z.]/g,"")===m.toLowerCase().replace(/[^a-z.]/g,""));
+    return alt?`${m} (found "${alt}")`:m;
+  });
+  return "Missing column: "+near.join(", ")+". Found "+res.cols.length+" columns, first is \""+(res.cols[0]||"")+"\"";
+};
+wireDrop("d-cats","cats", r=>need(r,["key","parent.key","custom.fields.active"]));
+wireDrop("d-prods","prods", r=>{
+  const hard = need(r,["key","categories"]);
+  if(hard) return hard;
+  const soft = ["attributes.category_main","attributes.fit"].filter(c=>!r.cols.includes(c));
+  if(soft.length===2)
+    return "Loaded, but this export has no attribute columns. Re-export with attributes.category_main and attributes.fit included, or supply them in the item list.";
+  if(soft.length===1)
+    return "Loaded, but "+soft[0]+" is missing from this export.";
+  return null;
+});
+wireDrop("d-items","items", null);
+
+/* ---- column pickers + readiness ---- */
+/* Rebuilding a select wipes its value, and afterLoad() runs on every change — so a
+   column the person picked would be reset by their own click. Keep their choice, and
+   only auto-guess the first time the options are built for a given file. */
+function fill(sel, cols, guess, blank){
+  const el=$(sel);
+  const prev = el.dataset.touched==="1" ? el.value : null;
+  el.innerHTML=(blank?`<option value="">${blank}</option>`:"")+cols.map(c=>`<option>${c}</option>`).join("");
+  if(prev!==null && [...el.options].some(o=>o.value===prev)){ el.value=prev; return; }
+  if(guess){ const hit=cols.find(guess); if(hit) el.value=hit; }
+}
+function markTouched(id){ const el=$(id); if(el) el.dataset.touched="1"; }
+
+/* does this cell count as "marked"? */
+function isMarked(cell){
+  const v=String(cell??"").trim();
+  if(!v) return false;
+  const want=$("flagVal")?.value||"__any__";
+  if(want==="__any__") return true;
+  return v.toLowerCase()===want.toLowerCase();
+}
+
+/* distinct values in a column, most common first */
+function valueCounts(col){
+  const m=new Map();
+  for(const r of S.items.rows){
+    const v=String(r[col]??"").trim();
+    if(v) m.set(v,(m.get(v)||0)+1);
+  }
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]);
+}
+
+/* first real value in a column, so you can see you picked the right one */
+function firstValue(col){
+  if(!col || !S.items) return null;
+  for(const r of S.items.rows){
+    const v=String(r[col]??"").trim();
+    if(v) return v;
+  }
+  return null;
+}
+/* The column name is a weak signal: buying's files call the key all sorts of things.
+   Test the values instead — the right column is the one whose values actually match
+   product keys in the commercetools export. */
+function productKeySet(){
+  if(!S.prods) return null;
+  if(S._keySet) return S._keySet;
+  const set=new Set(); let last=null;
+  for(const r of S.prods.rows){
+    let k=String(r["key"]||"").trim();
+    if(k) last=k; else k=last;
+    if(k) set.add(k);
+  }
+  return (S._keySet=set);
+}
+function scoreColumn(col){
+  const keys=productKeySet();
+  if(!keys || !S.items) return null;
+  let checked=0, hit=0;
+  for(const r of S.items.rows){
+    const v=String(r[col]??"").trim();
+    if(!v) continue;
+    checked++;
+    if(keys.has(v)) hit++;
+    if(checked>=300) break;
+  }
+  return checked ? {checked, hit, rate: hit/checked} : null;
+}
+function bestKeyColumn(){
+  let best=null;
+  for(const c of S.items.cols){
+    const s=scoreColumn(c);
+    if(s && (!best || s.rate>best.rate)) best={col:c, ...s};
+  }
+  return best;
+}
+
+function drawPlan(){
+  const el=$("plan"); if(!el) return;
+  const n = S.items ? "the products in your item list" : "every product in the product export";
+  const skip = (($("skipSale")?.value||"skip")==="skip" && S.mode!=="r2s")
+    ? ", skipping anything currently on sale" : "";
+  let what;
+  if(S.mode==="s2r")      what = `remove the sale categories from ${n} and work out the regular ones from PIM`;
+  else if(S.mode==="r2s") what = `move ${n} out of the regular navigation and into <b>${$("campaign")?.value||"a campaign"}</b>`;
+  else if(S.mode==="val") what = `read what ${n} currently has and report anything wrong. Nothing is changed and no upload file is produced`;
+  else {
+    const fix = S.fix==="replace" ? "replace any category that contradicts PIM"
+                                  : "add the missing categories and leave the rest alone";
+    const ex = S.extras.length ? ", and add the extras you ticked" : "";
+    what = `work out the regular categories for ${n} from PIM, ${fix}${ex}`;
+  }
+  let scope="";
+  if(S.items && S.prods && $("keyCol")?.value){
+    const s=scoreColumn($("keyCol").value);
+    if(s && s.hit<s.checked){
+      const pct=s.hit/s.checked;
+      scope = ` About <b>${Math.round(pct*S.items.rows.length)}</b> of `
+            + `${S.items.rows.length} listed products are in the export; the rest are skipped.`;
+    }
+  }
+  el.innerHTML = `This will ${what}${skip}.${scope}`;
+  el.classList.toggle("ready", !!(S.cats && S.prods));
+}
+
+const OPTIONAL_FIELDS = ["f-flag","f-flagv","f-cmain","f-deliv","f-delivcut","f-skipsale","f-disc"];
+function applyMore(){
+  const t=$("moreTog"); if(!t) return;
+  const open = t.getAttribute("aria-expanded")==="true";
+  t.textContent = open ? "Hide the optional settings" : "Show the optional settings";
+  for(const id of OPTIONAL_FIELDS){
+    const el=$(id); if(!el) continue;
+    if(el.dataset.avail==="0"){ el.classList.add("hidden"); continue; }
+    el.classList.toggle("hidden", !open);
+  }
+}
+
+function drawPicked(){
+  const el=$("extraPicked"); if(!el) return;
+  if(!S.extras.length){ el.innerHTML=`<span class="none">Nothing extra selected</span>`; return; }
+  const T=S.cats?buildTree(S.cats.rows):null;
+  const parts=S.extras.map(v=>{
+    if(v==="__new__") return "men-new / women-new / accessories-new";
+    if(v.startsWith("__slot__")){
+      const s=v.slice(8);
+      return ["men-featured-"+s,"women-featured-"+s].filter(k=>!T||T.all.has(k)).join(" / ");
+    }
+    return v;
+  });
+  el.innerHTML = `Selected (${S.extras.length}): ` + parts.join("  +  ");
+}
+
+function fillFlagValues(){
+  const col=$("flagCol").value;
+  const box=$("f-flagv"), sel=$("flagVal");
+  if(!col){ box.dataset.avail="0"; box.classList.add("hidden"); sel.innerHTML=""; return; }
+  box.dataset.avail="1";
+  const vals=valueCounts(col);
+  const prev=sel.value;
+  sel.innerHTML = `<option value="__any__">Any value at all</option>`
+    + vals.slice(0,15).map(([v,n])=>`<option value="${String(v).replace(/"/g,"&quot;")}">${String(v).replace(/</g,"&lt;")} (${n})</option>`).join("");
+  // keep the previous pick if it still exists, otherwise default to the most common value
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+  else if(vals.length===1) sel.value=vals[0][0];
+  else sel.value="__any__";
+}
+
+function showEg(selId, egId){
+  const el=$(egId); if(!el) return;
+  const col=$(selId).value;
+  if(!col){ el.textContent=""; return; }
+  const v=firstValue(col);
+  if(egId==="eg-flag"){
+    const vals=valueCounts(col);
+    el.innerHTML = vals.length
+      ? `values found: <b>${vals.slice(0,4).map(([v,n])=>`${String(v).replace(/</g,"&lt;")} \u00d7${n}`).join(", ")}</b>${vals.length>4?" \u2026":""}`
+      : "column is empty";
+  } else if(egId==="eg-key"){
+    const s=scoreColumn(col);
+    if(!s){ el.innerHTML = "column is empty"; return; }
+    const pct=Math.round(s.rate*100), miss=s.checked-s.hit;
+    const best=bestKeyColumn();
+    if(pct>=90)
+      el.innerHTML = `<b>${pct}%</b> of these rows match a product in the product export`;
+    else if(best && best.col!==col && best.rate>s.rate+0.2)
+      el.innerHTML = `<b style="color:var(--hold-ink)">only ${pct}% match.</b> "${best.col}" matches `
+                   + `${Math.round(best.rate*100)}% \u2014 use that instead`;
+    else
+      el.innerHTML = `<b style="color:var(--hold-ink)">${pct}% match.</b> The other ${miss} of `
+                   + `${s.checked} are not in the product export, so they cannot be processed. `
+                   + `Usually that means they are not in commercetools yet`;
+  } else {
+    el.innerHTML = v ? `first value: <b>${String(v).replace(/</g,"&lt;")}</b>` : "column is empty";
+  }
+}
+function refreshEgs(){
+  showEg("keyCol","eg-key"); showEg("flagCol","eg-flag");
+  showEg("discCol","eg-disc"); showEg("cmainCol","eg-cmain");
+  const dc=$("delivCol")?.value, de=$("eg-deliv");
+  if(de){
+    if(!dc || !S.items) de.textContent="";
+    else{
+      const seen=new Map(), bad=new Set();
+      for(const r of S.items.rows){
+        const raw=String(r[dc]??"").trim();
+        if(!raw) continue;
+        const d=parseDate(raw);
+        if(d) { if(!seen.has(raw)) seen.set(raw, d); }
+        else bad.add(raw);
+      }
+      const parts=[...seen.entries()].sort((a,b)=>a[1]-b[1])
+        .slice(0,6).map(([raw,d])=>`${raw} \u2192 ${d.toISOString().slice(0,10)}`);
+      de.innerHTML = parts.length
+        ? parts.join(" \u00b7 ") + (bad.size
+            ? ` \u00b7 <b style="color:var(--hold-ink)">not recognised: ${[...bad].slice(0,4).join(", ")}</b>` : "")
+        : (bad.size ? `<b style="color:var(--hold-ink)">none of these recognised: ${[...bad].slice(0,5).join(", ")}</b>`
+                    : "column is empty");
+    }
+  }
+  const cutEl=$("eg-delivcut");
+  if(cutEl){
+    const cv=$("delivCut")?.value;
+    if(!dc||!S.items) cutEl.textContent="";
+    else if(!cv) cutEl.textContent="no cutoff, every dated row counts";
+    else{
+      const cut=parseDate(cv);
+      const filled=S.items.rows.filter(r=>String(r[dc]??"").trim()).length;
+      const dated =S.items.rows.filter(r=>parseDate(r[dc])).length;
+      const n     =S.items.rows.filter(r=>{const d=parseDate(r[dc]); return d&&cut&&d<=cut;}).length;
+      if(!filled) cutEl.innerHTML=`<b style="color:var(--hold-ink)">that column has no values</b> \u2014 pick another one`;
+      else if(!dated) cutEl.innerHTML=`<b style="color:var(--hold-ink)">${filled} rows have a value but none could be read as a date or a drop code</b> \u2014 add the codes to delivery_windows in the rules panel`;
+      else cutEl.innerHTML=`<b>${n}</b> of ${dated} dated rows qualify as new arrivals`;
+    }
+  }
+  const col=$("flagCol").value, el=$("eg-flagv");
+  if(el) el.innerHTML = col && S.items
+    ? `<b>${S.items.rows.filter(r=>isMarked(r[col])).length}</b> of ${S.items.rows.length} rows will be processed`
+    : "";
+}
+function afterLoad(){
+  if(S.items){
+    $("f-key").classList.remove("hidden"); $("sh-items").classList.remove("hidden");
+    $("f-flag").dataset.avail="1";
+    fill("keyCol", S.items.cols, c=>false);
+    if($("keyCol").dataset.touched!=="1"){
+      const best = bestKeyColumn();
+      if(best && best.rate>0.5) $("keyCol").value = best.col;
+      else {
+        const guess = S.items.cols.find(c=>/product\s*id|^key$|artikel|style/i.test(c));
+        if(guess) $("keyCol").value = guess;
+      }
+    }
+    fill("flagCol", S.items.cols, c=>/full\s*price|back to/i.test(c), "Use every row");
+    fill("discCol", S.items.cols, c=>/discount|reduction|%|^mss$/i.test(c), "Not in this file");
+    fill("cmainCol",
+      S.items.cols.filter(c=>/waregroup|category|kategorie|produktgruppe/i.test(c)),
+      c=>/waregroup|category.?main/i.test(c),
+      "Use the product export");
+    fill("delivCol", S.items.cols, c=>/deliver|delivery|liefer|ship|drop.?date|eta/i.test(c), "Apply to every row");
+    refreshEgs();
+    fillFlagValues();
+    ["keyCol","discCol","cmainCol"].forEach(id=>$(id).onchange=()=>{markTouched(id);refreshEgs();afterLoad();});
+    $("flagCol").onchange=()=>{markTouched("flagCol");fillFlagValues();refreshEgs();afterLoad();};
+    $("flagVal").onchange=()=>{markTouched("flagVal");refreshEgs();afterLoad();};
+    $("delivCol").onchange=()=>{markTouched("delivCol");refreshEgs();afterLoad();};
+    $("delivCut").onchange=()=>{markTouched("delivCut");refreshEgs();afterLoad();};
+  } else { $("f-key").classList.add("hidden"); $("sh-items").classList.add("hidden");
+           $("f-flag").dataset.avail="0";
+           $("f-flagv").classList.add("hidden");
+           ["eg-key","eg-flag","eg-flagv","eg-disc","eg-cmain"].forEach(i=>{ if($(i)) $(i).textContent=""; }); }
+  if(S.cats){
+    const T=buildTree(S.cats.rows);
+    const camps=detectCampaigns(T);
+    const previousCampaign=$('campaign').value;
+    $("campaign").innerHTML = camps.length ? camps.map(c=>`<option>${c}</option>`).join("")
+      : `<option value="">None found in the export</option>`;
+    if(previousCampaign && [...$("campaign").options].some(o=>o.value===previousCampaign))
+      $("campaign").value=previousCampaign;
+    // Featured slots come in men-/women- pairs that usually share a name, e.g.
+    // men-featured-4 and women-featured-4 are both "Garment-Dyed Jersey".
+    // Offer the pair as one choice and let it apply by gender.
+    const featured=[...T.all].filter(k=>T.active.has(k) && !isSale(T,k)
+      && /^(men|women)-featured-/.test(k) && T.parent[k]);
+    const slots=new Map();   // suffix -> {men, women, label}
+    for(const k of featured){
+      const m=k.match(/^(men|women)-featured-(.+)$/); if(!m) continue;
+      const e=slots.get(m[2]) || {label:""};
+      e[m[1]]=k;
+      e.label = e.label || String(T.name[k]||"").trim();
+      slots.set(m[2], e);
+    }
+    const row=(v,t,sub)=>`<label class="pick" data-v="${v}">
+        <input type="checkbox" value="${v}">
+        <span class="pk-t">${t}${sub?`<span class="pk-s">${sub}</span>`:""}</span></label>`;
+
+    let html="";
+    if(T.all.has("men-new")){
+      html += `<div class="grp">New arrivals</div>`
+        + row("__new__","New arrivals","men-new / women-new / accessories-new, by gender");
+    }
+    const pairs=[...slots.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    if(pairs.length){
+      html += `<div class="grp">Featured slots</div>`;
+      for(const [sfx,e] of pairs){
+        const keys=[e.men,e.women].filter(Boolean);
+        const who=(e.men&&e.women)?"men + women, by gender":(e.men?"men only":"women only");
+        html += row("__slot__"+sfx, e.label||sfx, keys.join(" / ")+" \u00b7 "+who);
+      }
+    }
+    const tops=[...T.all].filter(k=>T.active.has(k)&&/^(men|women)-featured$/.test(k)).sort();
+    if(tops.length){
+      html += `<div class="grp">Featured, top level</div>`;
+      for(const k of tops) html += row(k, k, "exactly this category, no gender split");
+    }
+    $("extraList").innerHTML = html || `<div class="grp">Nothing available in this export</div>`;
+    $("extraList").querySelectorAll("input").forEach(cb=>{
+      cb.checked = S.extras.includes(cb.value);
+      cb.closest(".pick").classList.toggle("on", cb.checked);
+      cb.onchange=()=>{
+        S.extras = [...$("extraList").querySelectorAll("input")].filter(x=>x.checked).map(x=>x.value);
+        $("extraList").querySelectorAll("input").forEach(x=>x.closest(".pick").classList.toggle("on",x.checked));
+        drawPicked(); afterLoad();
+      };
+    });
+    drawPicked();
+  }
+  updateMode();
+  applyMore(); drawPlan();
+  let keyOk = true, keyMsg = "";
+  if(S.items && S.prods){
+    const s=scoreColumn($("keyCol").value);
+    const b=bestKeyColumn();
+    if(!s || s.hit===0){
+      keyOk=false;
+      keyMsg = (b && b.hit>0)
+        ? `No row in "${$("keyCol").value}" matches a product in the export. Try "${b.col}".`
+        : "No column in the item list matches a product key in the export. Check that both files cover the same products.";
+    } else if(b && b.col!==$("keyCol").value && b.rate > s.rate + 0.2){
+      keyMsg = `"${b.col}" matches more rows (${Math.round(b.rate*100)}%). Worth switching before you run.`;
+    }
+  }
+  const ok = !!(S.cats && S.prods) && keyOk && (S.mode!=="r2s" || $("campaign").value);
+  if(!ok && S.rows){ S.rows=null; $("results").classList.add("hidden"); $("dlSection").classList.add("hidden"); }
+  $("run").disabled = !ok;
+  $("ready").textContent = ok ? ""
+    : keyMsg ? keyMsg
+    : !S.cats ? "Waiting on the category export."
+    : !S.prods ? "Waiting on the product export."
+    : "Pick a sale campaign.";
+}
+
+/* ---- mode switch ---- */
+function syncModeCards(){
+  $("m-s2r").setAttribute("aria-pressed", String(S.mode==="s2r"));
+  $("m-r2s").setAttribute("aria-pressed", String(S.mode==="r2s"));
+  $("m-add").setAttribute("aria-pressed", String(S.mode==="new" && S.fix==="add"));
+  $("m-correct").setAttribute("aria-pressed", String(S.mode==="new" && S.fix==="replace"));
+  $("m-val").setAttribute("aria-pressed", String(S.mode==="val"));
+}
+function setMode(m, fix){
+  S.mode=m;
+  if(m==="new" && fix){ S.fix=fix; $("fixMode").value=fix; }
+  syncModeCards();
+  updateMode(); afterLoad();
+}
+function updateMode(){
+  const md=$("modeDesc"); if(md) md.textContent = MODE_TEXT[S.mode];
+  $("f-camp").classList.toggle("hidden", S.mode!=="r2s");
+  $("f-disc").dataset.avail = (S.mode!=="r2s" || !S.items) ? "0" : "1";
+  // only useful when some of the listed products are not in commercetools yet
+  let unmatched=0;
+  if(S.items && S.prods && $("keyCol").value){
+    const s=scoreColumn($("keyCol").value);
+    if(s) unmatched = s.checked - s.hit;
+  }
+  // category_main lives in the product export. This picker is only a fallback for products
+  // that are not in commercetools yet, and only if buying's file carries a category column.
+  const catCols = S.items ? S.items.cols.filter(c=>/waregroup|category|kategorie|produktgruppe/i.test(c)) : [];
+  $("f-cmain").dataset.avail = (S.mode!=="new" || !S.items || !unmatched || !catCols.length) ? "0" : "1";
+  const ec=$("eg-cmain");
+  if(ec && unmatched && !$("cmainCol").value)
+    ec.innerHTML = `Only for the ${unmatched} listed products that are not in commercetools yet. `
+                 + `Everything else takes its category from the product export`;
+  $("f-skipsale").dataset.avail = S.mode==="r2s" ? "0" : "1";
+  const ss=$("eg-skipsale");
+  if(ss) ss.textContent = ($("skipSale")?.value||"skip")==="skip"
+    ? "sale products keep their sale categories, untouched"
+    : "sale products are processed too";
+  $("f-fix").classList.toggle("hidden", S.mode!=="new");
+  $("f-extra").classList.toggle("hidden", S.mode!=="new");
+  const fe=$("eg-fix");
+  if(fe) fe.textContent = S.fix==="replace"
+    ? "wrong categories are removed; featured, new arrivals and core products stay"
+    : "nothing is removed except redundant parents";
+  const wantDeliv = S.mode==="new" && !!S.items && S.extras.length>0;
+  $("f-deliv").dataset.avail = wantDeliv ? "1" : "0";
+  $("f-delivcut").dataset.avail = (wantDeliv && $("delivCol")?.value) ? "1" : "0";
+}
+$("m-s2r").onclick=()=>setMode("s2r");
+$("m-r2s").onclick=()=>setMode("r2s");
+$("moreTog").onclick=()=>{ const t=$("moreTog");
+  t.setAttribute("aria-expanded", String(t.getAttribute("aria-expanded")!=="true")); applyMore(); };
+$("m-add").onclick=()=>setMode("new","add");
+$("m-correct").onclick=()=>setMode("new","replace");
+$("fixMode").onchange=()=>{ S.fix=$("fixMode").value; syncModeCards(); updateMode(); drawPlan(); if(S.rows) run(); };
+$("skipSale").onchange=()=>{ S.skipSale=$("skipSale").value; updateMode(); drawPlan(); if(S.rows) run(); };
+$("m-val").onclick=()=>setMode("val");
+$("campaign").onchange=()=>{ afterLoad(); drawPlan(); if(S.rows) run(); };
+
+$("run").onclick=()=>{ try{ run(); }catch(e){ alert("Something went wrong building the files: "+e.message); } };
+
+/* ---- filters ---- */
+
+
+/* ---- config ---- */
+$("cfg").value = JSON.stringify(DEFAULT_CFG,null,2);
+$("cfgApply").onclick=()=>{
+  try{ CFG=JSON.parse($("cfg").value); $("cfgMsg").textContent="Rules applied."; if(S.cats&&S.prods&&S.rows) run(); }
+  catch(e){ $("cfgMsg").textContent="That isn't valid JSON: "+e.message; }
+};
+$("cfgSave").onclick=()=>dl("category-rules.json",$("cfg").value,"application/json");
+$("cfgLoad").onclick=()=>{ const p=$("cfgPicker"); p.value="";
+  p.onchange=()=>{ const f=p.files[0]; if(!f) return; const r=new FileReader();
+    r.onload=e=>{ $("cfg").value=e.target.result; $("cfgApply").click(); }; r.readAsText(f); };
+  p.click(); };
+$("cfgReset").onclick=()=>{ $("cfg").value=JSON.stringify(DEFAULT_CFG,null,2); CFG=JSON.parse($("cfg").value);
+  $("cfgMsg").textContent="Back to defaults."; };
+
+updateMode();
+</script>
